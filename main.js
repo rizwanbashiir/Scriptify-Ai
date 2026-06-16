@@ -6,6 +6,10 @@ import dotenv from "dotenv";
 import { connectDB } from "./utils/db/mongo.js";
 import { errorMiddleware } from "./middleware/errorMiddleware.js";
 import { globalRateLimiter } from "./middleware/rate.limit.middleware.js";
+import dns from "dns";
+
+dns.setDefaultResultOrder("ipv4first");
+dotenv.config({ override: true });
 
 // Routes
 import userRoutes from "./route/user/userRoute.js";
@@ -13,7 +17,7 @@ import blogRoutes from "./route/blog/blogRoute.js";
 import aiRoutes from "./route/ai/aiRoute.js";
 import adminRoutes from "./route/admin/adminRoute.js";
 
-dotenv.config();
+
 
 const app = express();
 
