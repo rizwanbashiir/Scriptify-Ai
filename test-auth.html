@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+    <!-- Replace YOUR_GOOGLE_CLIENT_ID_HERE with your actual Client ID -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <div id="g_id_onload" data-client_id="288054670881-2jlvgmgvr69r051kon8smb664df3a8ma.apps.googleusercontent.com"
+        data-callback="handleCredentialResponse">
+    </div>
+    <div class="g_id_signin" data-type="standard"></div>
+
+    <script>
+        function handleCredentialResponse(response) {
+            console.log("Encoded JWT ID token: " + response.credential);
+            // It will also show an alert so you can easily copy it
+            prompt("Copy your credential token:", response.credential);
+        }
+    </script>
+</body>
+
+</html>

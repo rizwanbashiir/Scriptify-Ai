@@ -7,12 +7,12 @@ import { sendEmail } from "../../utils/db/email.js";
 
 // ─── Token Helpers ─────────────────────────────────────────────────────────────
 
-const generateAccessToken = (user) =>
+export const generateAccessToken = (user) =>
   jwt.sign({ _id: user._id, role: user.role }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || "15m",
   });
 
-const generateRefreshToken = (user) =>
+export const generateRefreshToken = (user) =>
   jwt.sign({ _id: user._id }, process.env.JWT_REFRESH_SECRET, {
     expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
   });
@@ -86,6 +86,9 @@ export const signUp = async (req, res, next) => {
     const salt = await bcrypt.genSalt(12);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    const otp = crypto.randomInt(100000, 999999).toString();
+    const otpHash = await bcrypt.hash(otp, 10);
+
     const user = await User.create({
       firstName,
       lastName,
@@ -94,6 +97,19 @@ export const signUp = async (req, res, next) => {
       password: hashedPassword,
       // Only allow blogger/reader on signup; admin is set manually
       role: role === "blogger" ? "blogger" : "reader",
+      emailVerificationOTP: otpHash,
+      emailVerificationOTPExpires: new Date(Date.now() + 10 * 60 * 1000), // 10 mins
+    });
+
+    await sendEmail({
+      to: user.email,
+      subject: "Scriptify AI — Verify Your Email",
+      html: `
+        <h2>Email Verification</h2>
+        <p>Your OTP is: <strong style="font-size:24px">${otp}</strong></p>
+        <p>This OTP expires in <strong>10 minutes</strong>.</p>
+        <p>If you did not request this, please ignore this email.</p>
+      `,
     });
 
     const accessToken = generateAccessToken(user);
@@ -145,6 +161,12 @@ export const signIn = async (req, res, next) => {
         .json({ message: "Your account has been suspended. Contact support." });
     }
 
+    if (!user.isVerified && user.authProvider === "local") {
+      return res
+        .status(403)
+        .json({ message: "Please verify your email before logging in." });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
@@ -170,6 +192,88 @@ export const signIn = async (req, res, next) => {
       accessToken,
       refreshToken,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── VERIFY EMAIL ──────────────────────────────────────────────────────────────
+
+export const verifyEmail = async (req, res, next) => {
+  try {
+    let { email, otp } = req.body;
+    email = email.toLowerCase().trim();
+
+    const user = await User.findOne({ email }).select("+emailVerificationOTP +emailVerificationOTPExpires");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ message: "Email is already verified" });
+    }
+
+    if (!user.emailVerificationOTP || !user.emailVerificationOTPExpires) {
+      return res.status(400).json({ message: "No OTP found. Please resend OTP." });
+    }
+
+    if (user.emailVerificationOTPExpires < new Date()) {
+      return res.status(400).json({ message: "OTP has expired. Please resend OTP." });
+    }
+
+    const isMatch = await bcrypt.compare(otp, user.emailVerificationOTP);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    user.isVerified = true;
+    user.emailVerificationOTP = undefined;
+    user.emailVerificationOTPExpires = undefined;
+    await user.save();
+
+    res.status(200).json({ message: "Email verified successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── RESEND OTP ────────────────────────────────────────────────────────────────
+
+export const resendOTP = async (req, res, next) => {
+  try {
+    let { email } = req.body;
+    email = email.toLowerCase().trim();
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ message: "Email is already verified" });
+    }
+
+    const otp = crypto.randomInt(100000, 999999).toString();
+    const otpHash = await bcrypt.hash(otp, 10);
+
+    user.emailVerificationOTP = otpHash;
+    user.emailVerificationOTPExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+    await user.save();
+
+    await sendEmail({
+      to: user.email,
+      subject: "Scriptify AI — Verify Your Email",
+      html: `
+        <h2>Email Verification</h2>
+        <p>Your new OTP is: <strong style="font-size:24px">${otp}</strong></p>
+        <p>This OTP expires in <strong>10 minutes</strong>.</p>
+        <p>If you did not request this, please ignore this email.</p>
+      `,
+    });
+
+    res.status(200).json({ message: "A new OTP has been sent to your email" });
   } catch (error) {
     next(error);
   }
@@ -318,13 +422,29 @@ export const changePassword = async (req, res, next) => {
 export const forgotPassword = async (req, res, next) => {
   try {
     const { email } = req.body;
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    const user = await User.findOne({ email: email.toLowerCase().trim() }).select("+password");
 
     // Always return success to prevent email enumeration
     if (!user) {
       return res.status(200).json({
         message: "If that email exists, an OTP has been sent",
       });
+    }
+
+    if (!user.password) {
+      // User registered only through Google OAuth and has no password
+      await sendEmail({
+        to: user.email,
+        subject: "Scriptify AI — Password Reset Request",
+        html: `
+          <h2>Password Reset Request</h2>
+          <p>Hello! We received a request to reset your password.</p>
+          <p>However, your account is linked to Google Sign-In and does not have a password. Please return to the application and use the <strong>Sign in with Google</strong> button to log in.</p>
+          <p>If you did not request this, please ignore this email.</p>
+        `,
+      });
+
+      return res.status(200).json({ message: "If that email exists, an OTP has been sent" });
     }
 
     // Generate 6-digit OTP
@@ -364,6 +484,10 @@ export const resetPassword = async (req, res, next) => {
 
     if (!user || !user.resetOTP || !user.resetOTPExpiry) {
       return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
+    if (user.isSuspended) {
+      return res.status(403).json({ message: "Your account has been suspended. Contact support." });
     }
 
     if (user.resetOTPExpiry < new Date()) {

@@ -18,7 +18,6 @@ import aiRoutes from "./route/ai/aiRoute.js";
 import adminRoutes from "./route/admin/adminRoute.js";
 
 
-
 const app = express();
 
 // ─── Security & Utility Middleware ──────────────────────────────────────────

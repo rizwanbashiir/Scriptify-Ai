@@ -24,6 +24,33 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
+    googleId: {
+      type: String,
+      sparse: true,
+      unique: true,
+    },
+
+    authProvider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local",
+    },
+
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+
+    emailVerificationOTP: {
+      type: String,
+      select: false,
+    },
+
+    emailVerificationOTPExpires: {
+      type: Date,
+      select: false,
+    },
+
     mobile: {
       type: String,
       trim: true,
@@ -31,7 +58,12 @@ const userSchema = new mongoose.Schema(
 
     password: {
       type: String,
-      required: [true, "Password is required"],
+      required: [
+        function () {
+          return this.authProvider === "local";
+        },
+        "Password is required",
+      ],
       minlength: 8,
       select: false,
     },

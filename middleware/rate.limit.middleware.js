@@ -12,7 +12,7 @@ export const globalRateLimiter = rateLimit({
 // Strict limiter for auth routes (prevent brute force)
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 100, // Temporarily increased for testing
   message: { message: "Too many login attempts. Please wait 15 minutes." },
 });
 
