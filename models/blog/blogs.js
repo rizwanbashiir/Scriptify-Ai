@@ -90,7 +90,7 @@ const blogSchema = new mongoose.Schema(
 );
 
 // ── Pre-save Hook: auto-calculate read time ──────────────────────────────────
-blogSchema.pre("save", function (next) {
+blogSchema.pre("save", function () {
   if (this.isModified("content")) {
     // Strip HTML tags for word count
     const plainText = this.content.replace(/<[^>]+>/g, " ");
@@ -102,7 +102,9 @@ blogSchema.pre("save", function (next) {
       this.excerpt = plainText.substring(0, 280).trim();
     }
   }
-  next();
+  console.log("typeof next =", typeof next);
+  console.log("inside blog schema in models")
+  //next();
 });
 
 // ── Indexes ──────────────────────────────────────────────────────────────────

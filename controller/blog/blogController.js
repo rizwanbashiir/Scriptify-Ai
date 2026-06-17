@@ -8,7 +8,10 @@ import { deleteFromCloudinary } from "../../utils/db/cloudinary.js";
 // ─── CREATE BLOG ───────────────────────────────────────────────────────────────
 
 export const createBlog = async (req, res, next) => {
+
+  console.log("at line 11")
   try {
+    console.log(typeof next);
     const {
       title,
       content,
@@ -20,7 +23,7 @@ export const createBlog = async (req, res, next) => {
       status,
       aiSummary,
     } = req.body;
-
+    console.log("at line 23")
     const blog = await Blog.create({
       title,
       content,
@@ -43,9 +46,16 @@ export const createBlog = async (req, res, next) => {
       message: "Blog created successfully",
       blog,
     });
-  } catch (error) {
-    next(error);
   }
+  catch (error) {
+    console.log("ACTUAL ERROR:");
+    console.log(error);
+    console.log(error.message);
+  }
+  // catch (error) {
+  //   console.log("i am here")
+  //   next(error);
+  // }
 };
 
 // ─── GET ALL BLOGS (with search, filter, pagination) ──────────────────────────
@@ -136,7 +146,7 @@ export const getBlogById = async (req, res, next) => {
         type: "view",
         blogCategory: blog.category,
         blogTags: blog.tags,
-      }).catch(() => {}); // fail silently
+      }).catch(() => { }); // fail silently
     }
 
     res.status(200).json(blog);
@@ -258,7 +268,7 @@ export const toggleLike = async (req, res, next) => {
       type: isLiked ? "unlike" : "like",
       blogCategory: blog.category,
       blogTags: blog.tags,
-    }).catch(() => {});
+    }).catch(() => { });
 
     res.status(200).json({
       message: isLiked ? "Like removed" : "Blog liked",
@@ -344,7 +354,7 @@ export const addComment = async (req, res, next) => {
       type: "comment",
       blogCategory: blog.category,
       blogTags: blog.tags,
-    }).catch(() => {});
+    }).catch(() => { });
 
     res.status(201).json({
       message: isToxic

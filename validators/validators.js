@@ -88,6 +88,17 @@ export const resetPasswordValidator = [
   handleValidationErrors,
 ];
 
+export const verifyEmailValidator = [
+  body("email").trim().isEmail().withMessage("Invalid email"),
+  body("otp").notEmpty().withMessage("OTP is required"),
+  handleValidationErrors,
+];
+
+export const resendOtpValidator = [
+  body("email").trim().isEmail().withMessage("Invalid email"),
+  handleValidationErrors,
+];
+
 // ─── Blog Validators ───────────────────────────────────────────────────────────
 
 export const createBlogValidator = [
