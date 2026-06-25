@@ -7,11 +7,70 @@ import { deleteFromCloudinary } from "../../utils/db/cloudinary.js";
 
 // ─── CREATE BLOG ───────────────────────────────────────────────────────────────
 
-export const createBlog = async (req, res, next) => {
+// export const createBlog = async (req, res, next) => {
+//   try {
+//     const {
+//       title,
+//       content,
+//       excerpt,
+//       category,
+//       tags,
+//       seoKeywords,
+//       metaDescription,
+//       status,
+//       aiSummary,
+//     } = req.body;
 
-  console.log("at line 11")
+//     const blog = await Blog.create({
+//       title,
+//       content,
+//       excerpt,
+//       category,
+//       tags: tags ? JSON.parse(tags) : [],
+//       seoKeywords: seoKeywords ? JSON.parse(seoKeywords) : [],
+//       metaDescription,
+//       status: status || "published",
+//       aiSummary: aiSummary || null,
+//       // Image URL set by upload middleware (Cloudinary)
+//       thumbnailUrl: req.cloudinaryUrl || null,
+//       thumbnailPublicId: req.cloudinaryPublicId || null,
+//       author: req.user._id,
+//     });
+
+//     await blog.populate("author", "firstName lastName avatar");
+
+//     res.status(201).json({
+//       message: "Blog created successfully",
+//       blog,
+//     });
+//   } catch (error) {
+//     next(error);
+//   }
+// };
+// Helper function to parse array fields
+const parseArrayField = (field) => {
+  if (!field) return [];
+
+  // Already an array
+  if (Array.isArray(field)) {
+    return field;
+  }
+
+  // Try parsing JSON string first
   try {
-    console.log(typeof next);
+    const parsed = JSON.parse(field);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    // Fall back to comma-separated string
+    return field
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+};
+
+export const createBlog = async (req, res, next) => {
+  try {
     const {
       title,
       content,
@@ -23,39 +82,36 @@ export const createBlog = async (req, res, next) => {
       status,
       aiSummary,
     } = req.body;
-    console.log("at line 23")
+
+
     const blog = await Blog.create({
       title,
       content,
       excerpt,
       category,
-      tags: tags ? JSON.parse(tags) : [],
-      seoKeywords: seoKeywords ? JSON.parse(seoKeywords) : [],
+      tags: parseArrayField(tags),
+      seoKeywords: parseArrayField(seoKeywords),
       metaDescription,
       status: status || "published",
       aiSummary: aiSummary || null,
+
       // Image URL set by upload middleware (Cloudinary)
       thumbnailUrl: req.cloudinaryUrl || null,
       thumbnailPublicId: req.cloudinaryPublicId || null,
+
       author: req.user._id,
     });
 
     await blog.populate("author", "firstName lastName avatar");
 
     res.status(201).json({
+      success: true,
       message: "Blog created successfully",
       blog,
     });
+  } catch (error) {
+    next(error);
   }
-  catch (error) {
-    console.log("ACTUAL ERROR:");
-    console.log(error);
-    console.log(error.message);
-  }
-  // catch (error) {
-  //   console.log("i am here")
-  //   next(error);
-  // }
 };
 
 // ─── GET ALL BLOGS (with search, filter, pagination) ──────────────────────────
@@ -176,8 +232,15 @@ export const updateBlog = async (req, res, next) => {
     blog.content = content ?? blog.content;
     blog.excerpt = excerpt ?? blog.excerpt;
     blog.category = category ?? blog.category;
-    blog.tags = tags ? JSON.parse(tags) : blog.tags;
-    blog.seoKeywords = seoKeywords ? JSON.parse(seoKeywords) : blog.seoKeywords;
+    
+    // Parse tags and keywords using helper if they are provided in request
+    if (tags !== undefined) {
+      blog.tags = parseArrayField(tags);
+    }
+    if (seoKeywords !== undefined) {
+      blog.seoKeywords = parseArrayField(seoKeywords);
+    }
+
     blog.metaDescription = metaDescription ?? blog.metaDescription;
     blog.status = status ?? blog.status;
     blog.aiSummary = aiSummary ?? blog.aiSummary;

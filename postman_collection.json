@@ -1,239 +1,1041 @@
 {
   "info": {
-    "name": "Scriptify AI API",
-    "description": "Postman collection for Scriptify AI REST API.",
+    "_postman_id": "scriptify-ai-e2e-collection",
+    "name": "Scriptify AI — End-to-End API Tests",
+    "description": "Complete end-to-end Postman collection for Scriptify AI API. Run folders in order: Auth → Blogs → AI → Admin.\n\n**Setup:**\n1. Set collection variable `baseUrl` to `http://localhost:5000/api`\n2. Run the Auth folder first — it auto-extracts tokens and IDs\n3. Remaining folders use `{{accessToken}}`, `{{blogId}}`, etc. automatically",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:5000/api",
-      "type": "string"
-    },
-    {
-      "key": "token",
-      "value": "",
-      "type": "string"
-    }
+    { "key": "baseUrl",      "value": "http://localhost:5000/api", "type": "string" },
+    { "key": "accessToken",  "value": "", "type": "string" },
+    { "key": "refreshToken", "value": "", "type": "string" },
+    { "key": "userId",       "value": "", "type": "string" },
+    { "key": "blogId",       "value": "", "type": "string" },
+    { "key": "commentId",    "value": "", "type": "string" },
+    { "key": "adminToken",   "value": "", "type": "string" },
+    { "key": "testEmail",    "value": "e2etest_{{$randomInt}}@scriptify.dev", "type": "string" },
+    { "key": "testPassword", "value": "TestPass123", "type": "string" }
   ],
   "item": [
+
     {
-      "name": "Health",
+      "name": "🔐 Auth",
+      "description": "Authentication flows: signup, verify, signin, token refresh, password reset, Google OAuth",
       "item": [
+
         {
           "name": "Health Check",
           "request": {
             "method": "GET",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/health",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "health"
-              ]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "Users",
-      "item": [
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Status ok', () => { const b = pm.response.json(); pm.expect(b.status).to.eql('ok'); });"
+          ], "type": "text/javascript" }}]
+        },
+
         {
           "name": "Sign Up",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"Password123\",\n  \"role\": \"reader\"\n}"
+              "raw": "{\n  \"firstName\": \"E2E\",\n  \"lastName\": \"Tester\",\n  \"email\": \"e2etest@scriptify.dev\",\n  \"password\": \"TestPass123\"\n}"
             },
-            "url": {
-              "raw": "{{baseUrl}}/users/signup",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                "signup"
-              ]
-            }
-          }
+            "url": { "raw": "{{baseUrl}}/users/signup", "host": ["{{baseUrl}}"], "path": ["users", "signup"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201 — user created', () => pm.response.to.have.status(201));",
+            "pm.test('Response has message', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); });"
+          ], "type": "text/javascript" }}]
         },
+
+        {
+          "name": "Sign Up — Validation Error (missing password)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Bad\",\n  \"lastName\": \"User\",\n  \"email\": \"bad@scriptify.dev\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/signup", "host": ["{{baseUrl}}"], "path": ["users", "signup"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — validation fails', () => pm.response.to.have.status(400));",
+            "pm.test('Has errors array', () => { const b = pm.response.json(); pm.expect(b).to.have.property('errors'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Sign Up — Duplicate Email",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"E2E\",\n  \"lastName\": \"Tester\",\n  \"email\": \"e2etest@scriptify.dev\",\n  \"password\": \"TestPass123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/signup", "host": ["{{baseUrl}}"], "path": ["users", "signup"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — duplicate email', () => pm.response.to.have.status(400));",
+            "pm.test('Has message field', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"email\": \"e2etest@scriptify.dev\" }"
+            },
+            "url": { "raw": "{{baseUrl}}/users/resend-otp", "host": ["{{baseUrl}}"], "path": ["users", "resend-otp"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('OTP resent message', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Verify Email (enter OTP from inbox)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"e2etest@scriptify.dev\",\n  \"otp\": \"ENTER_OTP_FROM_EMAIL\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/verify-email", "host": ["{{baseUrl}}"], "path": ["users", "verify-email"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — email verified', () => pm.response.to.have.status(200));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Verify Email — Wrong OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"e2etest@scriptify.dev\",\n  \"otp\": \"000000\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/verify-email", "host": ["{{baseUrl}}"], "path": ["users", "verify-email"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — invalid OTP', () => pm.response.to.have.status(400));"
+          ], "type": "text/javascript" }}]
+        },
+
         {
           "name": "Sign In",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"Password123\"\n}"
+              "raw": "{\n  \"email\": \"e2etest@scriptify.dev\",\n  \"password\": \"TestPass123\"\n}"
             },
-            "url": {
-              "raw": "{{baseUrl}}/users/signin",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                "signin"
-              ]
-            }
-          }
+            "url": { "raw": "{{baseUrl}}/users/signin", "host": ["{{baseUrl}}"], "path": ["users", "signin"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has accessToken', () => { const b = pm.response.json(); pm.expect(b).to.have.property('accessToken'); pm.collectionVariables.set('accessToken', b.accessToken); });",
+            "pm.test('Has refreshToken', () => { const b = pm.response.json(); pm.expect(b).to.have.property('refreshToken'); pm.collectionVariables.set('refreshToken', b.refreshToken); });",
+            "pm.test('Has user object', () => { const b = pm.response.json(); pm.expect(b.user).to.have.property('_id'); pm.collectionVariables.set('userId', b.user._id); });"
+          ], "type": "text/javascript" }}]
         },
+
         {
-          "name": "Get Profile",
+          "name": "Sign In — Wrong Password",
           "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/users/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                ":id"
-              ],
-              "variable": [
-                {
-                  "key": "id",
-                  "value": "user_id_here"
-                }
-              ]
-            }
-          }
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"e2etest@scriptify.dev\",\n  \"password\": \"WrongPassword999\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/signin", "host": ["{{baseUrl}}"], "path": ["users", "signin"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401 — invalid credentials', () => pm.response.to.have.status(401));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"refreshToken\": \"{{refreshToken}}\" }"
+            },
+            "url": { "raw": "{{baseUrl}}/users/refresh-token", "host": ["{{baseUrl}}"], "path": ["users", "refresh-token"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('New accessToken issued', () => { const b = pm.response.json(); pm.expect(b).to.have.property('accessToken'); pm.collectionVariables.set('accessToken', b.accessToken); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Refresh Token — Invalid",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"refreshToken\": \"invalid.token.here\" }"
+            },
+            "url": { "raw": "{{baseUrl}}/users/refresh-token", "host": ["{{baseUrl}}"], "path": ["users", "refresh-token"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401 — invalid token', () => pm.response.to.have.status(401));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"email\": \"e2etest@scriptify.dev\" }"
+            },
+            "url": { "raw": "{{baseUrl}}/users/forgot-password", "host": ["{{baseUrl}}"], "path": ["users", "forgot-password"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — OTP sent', () => pm.response.to.have.status(200));",
+            "pm.test('Has message', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Reset Password (enter OTP from inbox)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"e2etest@scriptify.dev\",\n  \"otp\": \"ENTER_OTP_FROM_EMAIL\",\n  \"newPassword\": \"NewPass456\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/reset-password", "host": ["{{baseUrl}}"], "path": ["users", "reset-password"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — password reset', () => pm.response.to.have.status(200));"
+          ], "type": "text/javascript" }}]
         }
       ]
     },
+
     {
-      "name": "Blogs",
+      "name": "👤 Users",
+      "description": "User profile, follow, bookmarks",
       "item": [
+
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has _id', () => { const b = pm.response.json(); pm.expect(b).to.have.property('_id'); });",
+            "pm.test('Has email', () => { const b = pm.response.json(); pm.expect(b).to.have.property('email'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Get User — Invalid ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/users/000000000000000000000000", "host": ["{{baseUrl}}"], "path": ["users", "000000000000000000000000"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404 — not found', () => pm.response.to.have.status(404));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "firstName", "value": "Updated", "type": "text" },
+                { "key": "lastName",  "value": "Tester",  "type": "text" },
+                { "key": "bio",       "value": "E2E test bio — passionate about APIs!", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/users/profile", "host": ["{{baseUrl}}"], "path": ["users", "profile"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('firstName updated', () => { const b = pm.response.json(); pm.expect(b.firstName || b.user?.firstName).to.eql('Updated'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Update Profile — Unauthorized",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "firstName", "value": "Hacker", "type": "text" }]
+            },
+            "url": { "raw": "{{baseUrl}}/users/profile", "host": ["{{baseUrl}}"], "path": ["users", "profile"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"oldPassword\": \"TestPass123\",\n  \"newPassword\": \"TestPass456\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/change-password", "host": ["{{baseUrl}}"], "path": ["users", "change-password"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Change Password — Wrong Old Password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"oldPassword\": \"WrongOldPass\",\n  \"newPassword\": \"TestPass789\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/change-password", "host": ["{{baseUrl}}"], "path": ["users", "change-password"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — wrong old password', () => pm.response.to.have.status(400));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Get My Bookmarks",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users/me/bookmarks", "host": ["{{baseUrl}}"], "path": ["users", "me", "bookmarks"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Response is array', () => { const b = pm.response.json(); pm.expect(b).to.be.an('array'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"refreshToken\": \"{{refreshToken}}\" }"
+            },
+            "url": { "raw": "{{baseUrl}}/users/logout", "host": ["{{baseUrl}}"], "path": ["users", "logout"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Logged out message', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); });"
+          ], "type": "text/javascript" }}]
+        }
+      ]
+    },
+
+    {
+      "name": "📝 Blogs",
+      "description": "Blog CRUD, likes, comments",
+      "item": [
+
         {
           "name": "Get All Blogs",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/blogs",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "blogs"
+              "raw": "{{baseUrl}}/blogs?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["blogs"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "10" }
               ]
             }
-          }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has blogs array', () => { const b = pm.response.json(); pm.expect(b.blogs || b).to.be.an('array'); });",
+            "pm.test('Has pagination', () => { const b = pm.response.json(); if (b.pagination) pm.expect(b.pagination).to.have.property('total'); });"
+          ], "type": "text/javascript" }}]
         },
+
+        {
+          "name": "Get All Blogs — Search Filter",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/blogs?search=AI&page=1&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["blogs"],
+              "query": [
+                { "key": "search", "value": "AI" },
+                { "key": "page",   "value": "1" },
+                { "key": "limit",  "value": "5" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ], "type": "text/javascript" }}]
+        },
+
         {
           "name": "Create Blog",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
             "body": {
-              "mode": "raw",
-              "raw": "{\n  \"title\": \"My First Blog\",\n  \"content\": \"This is the content...\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/blogs",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "blogs"
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title",   "value": "E2E Test Blog — AI Writing Tools", "type": "text" },
+                { "key": "content", "value": "This is an automated end-to-end test blog post about AI writing tools. It contains enough content to pass validation requirements for the Scriptify platform.", "type": "text" },
+                { "key": "tags",    "value": "[\"AI\",\"Testing\",\"Automation\"]", "type": "text" },
+                { "key": "status",  "value": "published", "type": "text" }
               ]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "AI",
-      "item": [
+            },
+            "url": { "raw": "{{baseUrl}}/blogs", "host": ["{{baseUrl}}"], "path": ["blogs"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Blog has _id', () => { const b = pm.response.json(); pm.expect(b._id || b.blog?._id).to.exist; pm.collectionVariables.set('blogId', b._id || b.blog?._id); });",
+            "pm.test('Blog has title', () => { const b = pm.response.json(); pm.expect(b.title || b.blog?.title).to.exist; });"
+          ], "type": "text/javascript" }}]
+        },
+
         {
-          "name": "Generate Draft",
+          "name": "Create Blog — Validation Error (no title)",
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"topic\": \"Artificial Intelligence in Healthcare\"\n}"
+              "raw": "{ \"content\": \"Some content without a title\" }"
             },
-            "url": {
-              "raw": "{{baseUrl}}/ai/generate-draft",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "ai",
-                "generate-draft"
+            "url": { "raw": "{{baseUrl}}/blogs", "host": ["{{baseUrl}}"], "path": ["blogs"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — validation error', () => pm.response.to.have.status(400));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Get Blog by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/blogs/{{blogId}}", "host": ["{{baseUrl}}"], "path": ["blogs", "{{blogId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Correct blog returned', () => { const b = pm.response.json(); pm.expect(b._id).to.eql(pm.collectionVariables.get('blogId')); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Get Blog — Not Found",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/blogs/000000000000000000000000", "host": ["{{baseUrl}}"], "path": ["blogs", "000000000000000000000000"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404', () => pm.response.to.have.status(404));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Get My Blogs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/blogs/me/blogs", "host": ["{{baseUrl}}"], "path": ["blogs", "me", "blogs"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has blogs', () => { const b = pm.response.json(); pm.expect(b.blogs || b).to.be.an('array'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Update Blog",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title",  "value": "E2E Test Blog — UPDATED", "type": "text" },
+                { "key": "content","value": "This content has been updated via the E2E test suite. The blog now contains updated information about AI writing tools.", "type": "text" },
+                { "key": "tags",   "value": "[\"AI\",\"Updated\",\"E2E\"]", "type": "text" },
+                { "key": "status", "value": "published", "type": "text" }
               ]
-            }
-          }
+            },
+            "url": { "raw": "{{baseUrl}}/blogs/{{blogId}}", "host": ["{{baseUrl}}"], "path": ["blogs", "{{blogId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Title updated', () => { const b = pm.response.json(); pm.expect(b.title || b.blog?.title).to.include('UPDATED'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Like Blog (Toggle)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/blogs/{{blogId}}/like", "host": ["{{baseUrl}}"], "path": ["blogs", "{{blogId}}", "like"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has liked field', () => { const b = pm.response.json(); pm.expect(b).to.have.property('liked'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Bookmark Blog (Toggle)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users/bookmarks/{{blogId}}", "host": ["{{baseUrl}}"], "path": ["users", "bookmarks", "{{blogId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has bookmarked field', () => { const b = pm.response.json(); pm.expect(b).to.have.property('bookmarked'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Follow User (Toggle)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}/follow", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}", "follow"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has following field', () => { const b = pm.response.json(); pm.expect(b).to.have.property('following'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Add Comment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"text\": \"This is an automated E2E test comment!\" }"
+            },
+            "url": { "raw": "{{baseUrl}}/blogs/{{blogId}}/comments", "host": ["{{baseUrl}}"], "path": ["blogs", "{{blogId}}", "comments"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Comment has _id', () => { const b = pm.response.json(); const id = b._id || b.comment?._id; pm.expect(id).to.exist; pm.collectionVariables.set('commentId', id); });",
+            "pm.test('Comment has text', () => { const b = pm.response.json(); pm.expect(b.text || b.comment?.text).to.exist; });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Add Comment — Validation (too short)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"text\": \"k\" }"
+            },
+            "url": { "raw": "{{baseUrl}}/blogs/{{blogId}}/comments", "host": ["{{baseUrl}}"], "path": ["blogs", "{{blogId}}", "comments"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — too short', () => pm.response.to.have.status(400));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Get Blog Comments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/blogs/{{blogId}}/comments", "host": ["{{baseUrl}}"], "path": ["blogs", "{{blogId}}", "comments"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has comments', () => { const b = pm.response.json(); pm.expect(b.comments || b).to.be.an('array'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Delete Comment",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/blogs/{{blogId}}/comments/{{commentId}}", "host": ["{{baseUrl}}"], "path": ["blogs", "{{blogId}}", "comments", "{{commentId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Delete Blog",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/blogs/{{blogId}}", "host": ["{{baseUrl}}"], "path": ["blogs", "{{blogId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ], "type": "text/javascript" }}]
         }
       ]
     },
+
     {
-      "name": "Admin",
+      "name": "🤖 AI",
+      "description": "AI writing tools and recommendations (rate-limited, requires auth)",
       "item": [
+
         {
-          "name": "Get Dashboard Stats",
+          "name": "Trending Blogs",
           "request": {
             "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/ai/recommendations/trending?limit=5", "host": ["{{baseUrl}}"], "path": ["ai", "recommendations", "trending"], "query": [{ "key": "limit", "value": "5" }] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has blogs array', () => { const b = pm.response.json(); pm.expect(b.blogs || b).to.be.an('array'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Similar Blogs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/ai/recommendations/similar/{{blogId}}", "host": ["{{baseUrl}}"], "path": ["ai", "recommendations", "similar", "{{blogId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 or 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Personalized Feed",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/ai/recommendations/feed?page=1&limit=10", "host": ["{{baseUrl}}"], "path": ["ai", "recommendations", "feed"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has blogs', () => { const b = pm.response.json(); pm.expect(b.blogs || b).to.be.an('array'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Log Reading Duration",
+          "request": {
+            "method": "POST",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"blogId\": \"{{blogId}}\",\n  \"duration\": 180\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/ai/recommendations/reading-duration", "host": ["{{baseUrl}}"], "path": ["ai", "recommendations", "reading-duration"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 or 201', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Generate Blog Draft",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"topic\": \"The future of AI in software development\",\n  \"tone\": \"professional\",\n  \"length\": \"medium\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/ai/generate-draft", "host": ["{{baseUrl}}"], "path": ["ai", "generate-draft"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has content or title', () => { const b = pm.response.json(); pm.expect(b.content || b.title || b.draft).to.exist; });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Generate Draft — No Topic",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": { "raw": "{{baseUrl}}/ai/generate-draft", "host": ["{{baseUrl}}"], "path": ["ai", "generate-draft"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — topic required', () => pm.response.to.have.status(400));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Summarize Blog",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Artificial intelligence is rapidly transforming the way we write and create content. From natural language processing to generative models, AI tools are empowering writers to produce better content faster. This post explores the top AI writing tools available in 2024 and how they compare in terms of quality, price, and ease of use. We will look at tools like ChatGPT, Claude, Gemini, and more.\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/ai/summarize", "host": ["{{baseUrl}}"], "path": ["ai", "summarize"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has summary', () => { const b = pm.response.json(); pm.expect(b.summary || b.result).to.exist; });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Generate SEO Tags",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Top 10 AI Writing Tools in 2024\",\n  \"content\": \"This article covers the best AI writing tools available this year, including ChatGPT, Claude, Gemini, and Jasper. We compare their features, pricing, and quality.\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/ai/generate-seo-tags", "host": ["{{baseUrl}}"], "path": ["ai", "generate-seo-tags"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has tags', () => { const b = pm.response.json(); pm.expect(b.tags || b.keywords).to.be.an('array'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Generate Titles",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"topic\": \"Machine learning for beginners\",\n  \"count\": 5\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/ai/generate-titles", "host": ["{{baseUrl}}"], "path": ["ai", "generate-titles"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has titles array', () => { const b = pm.response.json(); pm.expect(b.titles || b).to.be.an('array'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Improve Content",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"this is my blog post about ai. it have many information about ai tools. i think ai is very good for writing.\",\n  \"tone\": \"professional\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/ai/improve-content", "host": ["{{baseUrl}}"], "path": ["ai", "improve-content"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has improved content', () => { const b = pm.response.json(); pm.expect(b.improvedContent || b.content || b.result).to.exist; });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Analyze Sentiment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"This article is absolutely amazing! One of the best pieces I've read this year. Very informative and well-written.\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/ai/analyze-sentiment", "host": ["{{baseUrl}}"], "path": ["ai", "analyze-sentiment"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has sentiment field', () => { const b = pm.response.json(); pm.expect(b.sentiment).to.be.oneOf(['positive', 'negative', 'neutral']); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Generate Thumbnail",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"A futuristic robot writing on a glowing keyboard, digital art style\",\n  \"style\": \"vivid\",\n  \"size\": \"1792x1024\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/ai/generate-thumbnail", "host": ["{{baseUrl}}"], "path": ["ai", "generate-thumbnail"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has imageUrl', () => { const b = pm.response.json(); pm.expect(b.imageUrl || b.url || b.image).to.exist; });"
+          ], "type": "text/javascript" }}]
+        }
+      ]
+    },
+
+    {
+      "name": "🛡️ Admin",
+      "description": "Admin-only routes. Requires an admin account — set adminToken manually after logging in as admin.",
+      "item": [
+
+        {
+          "name": "Dashboard Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/admin/dashboard", "host": ["{{baseUrl}}"], "path": ["admin", "dashboard"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has totalUsers', () => { const b = pm.response.json(); pm.expect(b).to.have.property('totalUsers'); });",
+            "pm.test('Has totalBlogs', () => { const b = pm.response.json(); pm.expect(b).to.have.property('totalBlogs'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Dashboard — Non-Admin Forbidden",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/admin/dashboard", "host": ["{{baseUrl}}"], "path": ["admin", "dashboard"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — forbidden for non-admin', () => pm.response.to.have.status(403));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Get All Users (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
             "url": {
-              "raw": "{{baseUrl}}/admin/dashboard",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "admin",
-                "dashboard"
-              ]
+              "raw": "{{baseUrl}}/admin/users?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }]
             }
-          }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has users array', () => { const b = pm.response.json(); pm.expect(b.users || b).to.be.an('array'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Toggle User Suspension",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/admin/users/{{userId}}/suspend", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{userId}}", "suspend"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has isSuspended', () => { const b = pm.response.json(); pm.expect(b).to.have.property('isSuspended'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Change User Role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"role\": \"blogger\" }"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/users/{{userId}}/role", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{userId}}", "role"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has message', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Change Role — Invalid Role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"role\": \"superuser\" }"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/users/{{userId}}/role", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{userId}}", "role"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — invalid role', () => pm.response.to.have.status(400));"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Get All Blogs (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/admin/blogs?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "blogs"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has blogs array', () => { const b = pm.response.json(); pm.expect(b.blogs || b).to.be.an('array'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Toggle Featured Blog",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/admin/blogs/{{blogId}}/feature", "host": ["{{baseUrl}}"], "path": ["admin", "blogs", "{{blogId}}", "feature"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has isFeatured', () => { const b = pm.response.json(); pm.expect(b).to.have.property('isFeatured'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Get Flagged Comments",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/admin/comments/flagged", "host": ["{{baseUrl}}"], "path": ["admin", "comments", "flagged"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has comments array', () => { const b = pm.response.json(); pm.expect(b.comments || b).to.be.an('array'); });"
+          ], "type": "text/javascript" }}]
+        },
+
+        {
+          "name": "Moderate Comment — Approve",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"action\": \"approve\" }"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/comments/{{commentId}}/moderate", "host": ["{{baseUrl}}"], "path": ["admin", "comments", "{{commentId}}", "moderate"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 or 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+          ], "type": "text/javascript" }}]
         }
       ]
     }
+
   ]
 }
