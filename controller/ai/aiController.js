@@ -2,19 +2,19 @@
  * AI Controller — All 6 AI Features from Scriptify AI Synopsis
  *
  * STACK (100% FREE — no paid API needed):
- *  Text generation / NLP  → Ollama (local, llama3.2)
+ *  Text generation / NLP  → Groq API (Mixtral)
  *  Image generation       → Pollinations.ai (free) or self-hosted Stable Diffusion
  *  Sentiment analysis     → Hugging Face Inference API (free tier)
  */
 
-import { ollamaChat, parseOllamaJSON } from "../../config/ollama.js";
+import { groqChat, parseGroqJSON } from "../../config/groq.js";
 import { generateBlogThumbnail } from "../../services/image.service.js";
 import { analyzeSentiment } from "../../services/huggingface.service.js";
 import Blog from "../../models/blog/blogs.js";
 import mongoose from "mongoose";
 
 // ─── MODULE 3: AI WRITING ASSISTANT ───────────────────────────────────────────
-// GPT-4 → Ollama llama3.2
+// GPT-4 → Groq API
 
 export const generateBlogDraft = async (req, res, next) => {
   try {
@@ -54,11 +54,11 @@ Return ONLY this JSON structure (no other text):
       },
     ];
 
-    const raw = await ollamaChat(messages, { temperature: 0.7, maxTokens: 2000 });
+    const raw = await groqChat(messages, { temperature: 0.7, maxTokens: 2000, format: "json" });
 
     let draft;
     try {
-      draft = parseOllamaJSON(raw);
+      draft = parseGroqJSON(raw);
     } catch {
       return res.status(500).json({
         message: "AI returned an unexpected format. Please retry.",
@@ -68,9 +68,9 @@ Return ONLY this JSON structure (no other text):
 
     res.status(200).json({ message: "Blog draft generated successfully", draft });
   } catch (error) {
-    if (error.message?.includes("Ollama")) {
+    if (error.message?.includes("Groq")) {
       return res.status(503).json({
-        message: "AI service unavailable. Make sure Ollama is running: ollama serve",
+        message: "AI service unavailable. Check your Groq API key.",
       });
     }
     next(error);
@@ -120,7 +120,7 @@ Content: ${textToSummarize.substring(0, 3000)}`,
       },
     ];
 
-    const summary = await ollamaChat(messages, { temperature: 0.3, maxTokens: 300 });
+    const summary = await groqChat(messages, { temperature: 0.3, maxTokens: 300 });
 
     if (blogId) {
       await Blog.findByIdAndUpdate(blogId, { aiSummary: summary });
@@ -128,9 +128,9 @@ Content: ${textToSummarize.substring(0, 3000)}`,
 
     res.status(200).json({ message: "Summary generated successfully", summary });
   } catch (error) {
-    if (error.message?.includes("Ollama")) {
+    if (error.message?.includes("Groq")) {
       return res.status(503).json({
-        message: "AI service unavailable. Make sure Ollama is running: ollama serve",
+        message: "AI service unavailable. Check your Groq API key.",
       });
     }
     next(error);
@@ -174,11 +174,11 @@ Return ONLY this JSON (no other text):
       },
     ];
 
-    const raw = await ollamaChat(messages, { temperature: 0.3, maxTokens: 500 });
+    const raw = await groqChat(messages, { temperature: 0.3, maxTokens: 500, format: "json" });
 
     let seoData;
     try {
-      seoData = parseOllamaJSON(raw);
+      seoData = parseGroqJSON(raw);
     } catch {
       return res.status(500).json({
         message: "AI returned an unexpected format. Please retry.",
@@ -187,9 +187,9 @@ Return ONLY this JSON (no other text):
 
     res.status(200).json({ message: "SEO metadata generated successfully", seoData });
   } catch (error) {
-    if (error.message?.includes("Ollama")) {
+    if (error.message?.includes("Groq")) {
       return res.status(503).json({
-        message: "AI service unavailable. Make sure Ollama is running: ollama serve",
+        message: "AI service unavailable. Check your Groq API key.",
       });
     }
     next(error);
@@ -264,11 +264,11 @@ Return ONLY a JSON array of 5 strings:
       },
     ];
 
-    const raw = await ollamaChat(messages, { temperature: 0.8, maxTokens: 300 });
+    const raw = await groqChat(messages, { temperature: 0.8, maxTokens: 300, format: "json" });
 
     let titles;
     try {
-      titles = parseOllamaJSON(raw);
+      titles = parseGroqJSON(raw);
       if (!Array.isArray(titles)) throw new Error("Not an array");
     } catch {
       return res.status(500).json({ message: "AI error. Please retry." });
@@ -276,9 +276,9 @@ Return ONLY a JSON array of 5 strings:
 
     res.status(200).json({ message: "Titles generated", titles });
   } catch (error) {
-    if (error.message?.includes("Ollama")) {
+    if (error.message?.includes("Groq")) {
       return res.status(503).json({
-        message: "AI service unavailable. Make sure Ollama is running: ollama serve",
+        message: "AI service unavailable. Check your Groq API key.",
       });
     }
     next(error);
@@ -309,13 +309,13 @@ ${content}`,
       },
     ];
 
-    const improved = await ollamaChat(messages, { temperature: 0.3, maxTokens: 2000 });
+    const improved = await groqChat(messages, { temperature: 0.3, maxTokens: 2000 });
 
     res.status(200).json({ message: "Content improved successfully", improved });
   } catch (error) {
-    if (error.message?.includes("Ollama")) {
+    if (error.message?.includes("Groq")) {
       return res.status(503).json({
-        message: "AI service unavailable. Make sure Ollama is running: ollama serve",
+        message: "AI service unavailable. Check your Groq API key.",
       });
     }
     next(error);

@@ -102,9 +102,7 @@ blogSchema.pre("save", function () {
       this.excerpt = plainText.substring(0, 280).trim();
     }
   }
-  console.log("typeof next =", typeof next);
-  console.log("inside blog schema in models")
-  //next();
+  next();
 });
 
 // ── Indexes ──────────────────────────────────────────────────────────────────

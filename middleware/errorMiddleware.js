@@ -3,7 +3,7 @@
  * All controllers call next(error) to reach here.
  */
 export const errorMiddleware = (err, req, res, next) => {
-  console.error(`[Error] ${req.method} ${req.path}:`, err.message);
+  console.error(`[Error] ${req.method} ${req.path}:`, err.stack || err.message);
 
   // Mongoose validation error
   if (err.name === "ValidationError") {
