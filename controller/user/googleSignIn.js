@@ -6,13 +6,15 @@ import { generateAccessToken, generateRefreshToken } from "./userController.js";
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 export const googleSignIn = async (req, res, next) => {
+  console.log("on line 8");
   try {
+    console.log("on line 11");
     const { credential } = req.body;
-
+    console.log("credential", credential);
     if (!credential) {
       return res.status(400).json({ message: "Google credential token is required" });
     }
-
+    console.log("on line 17")
     let ticket;
     try {
       ticket = await client.verifyIdToken({
