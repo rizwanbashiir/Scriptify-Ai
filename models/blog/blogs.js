@@ -102,7 +102,7 @@ blogSchema.pre("save", function () {
       this.excerpt = plainText.substring(0, 280).trim();
     }
   }
-  next();
+  //next();
 });
 
 // ── Indexes ──────────────────────────────────────────────────────────────────

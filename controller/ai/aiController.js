@@ -208,9 +208,8 @@ export const generateThumbnail = async (req, res, next) => {
 
     const imagePrompt = customPrompt
       ? customPrompt
-      : `Professional blog cover image for article titled: "${title}". ${
-          excerpt ? `Topic: ${excerpt.substring(0, 150)}` : ""
-        }. Editorial magazine style, clean, modern, no text.`;
+      : `Professional blog cover image for article titled: "${title}". ${excerpt ? `Topic: ${excerpt.substring(0, 150)}` : ""
+      }. Editorial magazine style, clean, modern, no text.`;
 
     const { imageUrl, cloudinaryUrl, publicId } = await generateBlogThumbnail(imagePrompt);
 
@@ -259,7 +258,7 @@ export const generateTitles = async (req, res, next) => {
 ${topic ? `Topic: ${topic}` : ""}
 ${content ? `Content excerpt: ${content.substring(0, 400)}` : ""}
 
-Return ONLY a JSON array of 5 strings:
+Return ONLY a raw JSON array of exactly 5 strings, with no wrapping object and no key name, like this:
 ["Title 1", "Title 2", "Title 3", "Title 4", "Title 5"]`,
       },
     ];
@@ -268,9 +267,20 @@ Return ONLY a JSON array of 5 strings:
 
     let titles;
     try {
-      titles = parseGroqJSON(raw);
-      if (!Array.isArray(titles)) throw new Error("Not an array");
-    } catch {
+      const parsed = parseGroqJSON(raw);
+
+      if (Array.isArray(parsed)) {
+        titles = parsed;
+      } else if (parsed && typeof parsed === "object") {
+        // Model sometimes wraps the array in an object, e.g. { "titles": [...] }
+        const arrayValue = Object.values(parsed).find((v) => Array.isArray(v));
+        if (!arrayValue) throw new Error("No array found in response");
+        titles = arrayValue;
+      } else {
+        throw new Error("Not an array");
+      }
+    } catch (parseErr) {
+      console.error("generateTitles parse failure:", parseErr.message, "raw:", raw);
       return res.status(500).json({ message: "AI error. Please retry." });
     }
 

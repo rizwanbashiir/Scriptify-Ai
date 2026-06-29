@@ -71,8 +71,8 @@ export const getUserById = async (req, res, next) => {
 };
 
 // ─── SIGN UP ───────────────────────────────────────────────────────────────────
-
 export const signUp = async (req, res, next) => {
+  console.log("i am hereeeeeeeeee")
   try {
     let { firstName, lastName, email, mobile, password, role } = req.body;
 
@@ -95,27 +95,36 @@ export const signUp = async (req, res, next) => {
       email,
       mobile,
       password: hashedPassword,
-      // Only allow blogger/reader on signup; admin is set manually
       role: role === "blogger" ? "blogger" : "reader",
       emailVerificationOTP: otpHash,
-      emailVerificationOTPExpires: new Date(Date.now() + 10 * 60 * 1000), // 10 mins
+      emailVerificationOTPExpires: new Date(Date.now() + 10 * 60 * 1000),
     });
+    console.log("at line 101")
 
-    await sendEmail({
-      to: user.email,
-      subject: "Scriptify AI — Verify Your Email",
-      html: `
-        <h2>Email Verification</h2>
-        <p>Your OTP is: <strong style="font-size:24px">${otp}</strong></p>
-        <p>This OTP expires in <strong>10 minutes</strong>.</p>
-        <p>If you did not request this, please ignore this email.</p>
-      `,
-    });
+    // Always log in dev so any test email gets its OTP in the console
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[DEV] OTP for ${user.email}: ${otp}`);
+    }
+
+    try {
+      console.log("at line 107")
+      await sendEmail({
+        to: user.email,
+        subject: "Scriptify AI — Verify Your Email",
+        html: `
+          <h2>Email Verification</h2>
+          <p>Your OTP is: <strong style="font-size:24px">${otp}</strong></p>
+          <p>This OTP expires in <strong>10 minutes</strong>.</p>
+          <p>If you did not request this, please ignore this email.</p>
+        `,
+      });
+    } catch (emailError) {
+      console.error(`Failed to send verification email to ${user.email}:`, emailError.message);
+    }
 
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
-    // Store hashed refresh token
     user.refreshToken = await bcrypt.hash(refreshToken, 10);
     await user.save();
 
@@ -139,6 +148,73 @@ export const signUp = async (req, res, next) => {
     next(error);
   }
 };
+// export const signUp = async (req, res, next) => {
+//   try {
+//     let { firstName, lastName, email, mobile, password, role } = req.body;
+
+//     email = email.toLowerCase().trim();
+
+//     const existingUser = await User.findOne({ email });
+//     if (existingUser) {
+//       return res.status(409).json({ message: "Email already registered" });
+//     }
+
+//     const salt = await bcrypt.genSalt(12);
+//     const hashedPassword = await bcrypt.hash(password, salt);
+
+//     const otp = crypto.randomInt(100000, 999999).toString();
+//     const otpHash = await bcrypt.hash(otp, 10);
+
+//     const user = await User.create({
+//       firstName,
+//       lastName,
+//       email,
+//       mobile,
+//       password: hashedPassword,
+//       // Only allow blogger/reader on signup; admin is set manually
+//       role: role === "blogger" ? "blogger" : "reader",
+//       emailVerificationOTP: otpHash,
+//       emailVerificationOTPExpires: new Date(Date.now() + 10 * 60 * 1000), // 10 mins
+//     });
+
+//     await sendEmail({
+//       to: user.email,
+//       subject: "Scriptify AI — Verify Your Email",
+//       html: `
+//         <h2>Email Verification</h2>
+//         <p>Your OTP is: <strong style="font-size:24px">${otp}</strong></p>
+//         <p>This OTP expires in <strong>10 minutes</strong>.</p>
+//         <p>If you did not request this, please ignore this email.</p>
+//       `,
+//     });
+
+//     const accessToken = generateAccessToken(user);
+//     const refreshToken = generateRefreshToken(user);
+
+//     // Store hashed refresh token
+//     user.refreshToken = await bcrypt.hash(refreshToken, 10);
+//     await user.save();
+
+//     res.status(201).json({
+//       message: "Account created successfully",
+//       user: {
+//         id: user._id,
+//         firstName: user.firstName,
+//         lastName: user.lastName,
+//         email: user.email,
+//         role: user.role,
+//         avatar: user.avatar,
+//       },
+//       accessToken,
+//       refreshToken,
+//     });
+//   } catch (error) {
+//     if (error.code === 11000) {
+//       return res.status(409).json({ message: "Email already registered" });
+//     }
+//     next(error);
+//   }
+// };
 
 // ─── SIGN IN ───────────────────────────────────────────────────────────────────
 

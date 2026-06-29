@@ -305,6 +305,7 @@ router.post("/summarize", summarizeValidator, summarizeBlog);
 router.post("/generate-seo-tags", generateSEOTags);
 
 /**
+ * 
  * @swagger
  * /ai/generate-thumbnail:
  *   post:
