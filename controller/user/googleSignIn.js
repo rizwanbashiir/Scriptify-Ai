@@ -9,7 +9,7 @@ export const googleSignIn = async (req, res, next) => {
   console.log("on line 8");
   try {
     console.log("on line 11");
-    const { credential } = req.body;
+    const credential = req.body.credential || req.body.idToken;
     console.log("credential", credential);
     if (!credential) {
       return res.status(400).json({ message: "Google credential token is required" });
@@ -39,8 +39,17 @@ export const googleSignIn = async (req, res, next) => {
 
     let user = await User.findOne({ email }).select("+password +refreshToken");
 
+    const adminEmail = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.toLowerCase().trim() : "";
+    const subadminEmail = process.env.SUBADMIN_EMAIL ? process.env.SUBADMIN_EMAIL.toLowerCase().trim() : "";
+    const normalizedEmail = email.toLowerCase().trim();
+
     if (!user) {
       // User does not exist, create new user
+      let finalRole = "reader";
+      if (normalizedEmail === adminEmail || normalizedEmail === subadminEmail) {
+        finalRole = "admin";
+      }
+
       user = await User.create({
         firstName: given_name || name || "User",
         lastName: family_name || "",
@@ -49,7 +58,7 @@ export const googleSignIn = async (req, res, next) => {
         authProvider: "google",
         isVerified: true,
         avatar: picture,
-        role: "reader", // default role
+        role: finalRole,
       });
     } else {
       // User exists
@@ -57,8 +66,21 @@ export const googleSignIn = async (req, res, next) => {
         return res.status(403).json({ message: "Your account has been suspended. Contact support." });
       }
 
-      // Update missing Google info if needed
+      // Update missing Google info or enforce admin roles if needed
       let updated = false;
+
+      if (normalizedEmail === adminEmail || normalizedEmail === subadminEmail) {
+        if (user.role !== "admin") {
+          user.role = "admin";
+          updated = true;
+        }
+      } else {
+        if (user.role === "admin") {
+          user.role = "reader"; // Security demotion
+          updated = true;
+        }
+      }
+
       if (!user.googleId) {
         user.googleId = sub;
         user.authProvider = "google";
