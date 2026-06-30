@@ -9,8 +9,14 @@ import { globalRateLimiter } from "./middleware/rate.limit.middleware.js";
 import dns from "dns";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./config/swagger.js";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dns.setDefaultResultOrder("ipv4first");
+// Reload env config dynamically on start
 dotenv.config({ override: true });
 
 // Routes
@@ -29,9 +35,11 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com"],
         imgSrc: ["'self'", "data:", "https:"],
+        frameSrc: ["'self'", "https://accounts.google.com"],
+        connectSrc: ["'self'", "https://accounts.google.com", "https://oauth2.googleapis.com"],
       },
     },
   })
@@ -50,6 +58,11 @@ app.use("/api/users", userRoutes);
 app.use("/api/blogs", blogRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/admin", adminRoutes);
+
+// ─── Test Auth Client ────────────────────────────────────────────────────────
+app.get("/test-auth", (req, res) => {
+  res.sendFile(path.join(__dirname, "test-auth.html"));
+});
 
 // ─── Swagger UI ──────────────────────────────────────────────────────────────
 app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {

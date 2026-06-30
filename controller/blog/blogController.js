@@ -451,8 +451,7 @@ export const deleteComment = async (req, res, next) => {
         .json({ message: "Not authorized to delete this comment" });
     }
 
-    comment.isDeleted = true;
-    await comment.save();
+    await comment.deleteOne();
 
     res.status(200).json({ message: "Comment deleted" });
   } catch (error) {

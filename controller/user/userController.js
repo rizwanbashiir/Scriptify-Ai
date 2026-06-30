@@ -89,13 +89,23 @@ export const signUp = async (req, res, next) => {
     const otp = crypto.randomInt(100000, 999999).toString();
     const otpHash = await bcrypt.hash(otp, 10);
 
+    let finalRole = "reader";
+    const adminEmail = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.toLowerCase().trim() : "";
+    const subadminEmail = process.env.SUBADMIN_EMAIL ? process.env.SUBADMIN_EMAIL.toLowerCase().trim() : "";
+
+    if (email === adminEmail || email === subadminEmail) {
+      finalRole = "admin";
+    } else if (role === "blogger") {
+      finalRole = "blogger";
+    }
+
     const user = await User.create({
       firstName,
       lastName,
       email,
       mobile,
       password: hashedPassword,
-      role: role === "blogger" ? "blogger" : "reader",
+      role: finalRole,
       emailVerificationOTP: otpHash,
       emailVerificationOTPExpires: new Date(Date.now() + 10 * 60 * 1000),
     });
@@ -248,10 +258,28 @@ export const signIn = async (req, res, next) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    const adminEmail = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.toLowerCase().trim() : "";
+    const subadminEmail = process.env.SUBADMIN_EMAIL ? process.env.SUBADMIN_EMAIL.toLowerCase().trim() : "";
+
+    let roleUpdated = false;
+    if (email === adminEmail || email === subadminEmail) {
+      if (user.role !== "admin") {
+        user.role = "admin";
+        roleUpdated = true;
+      }
+    } else {
+      if (user.role === "admin") {
+        user.role = "reader"; // Security demotion
+        roleUpdated = true;
+      }
+    }
+
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
     user.refreshToken = await bcrypt.hash(refreshToken, 10);
+    
+    // Save user if role or refresh token changed
     await user.save();
 
     res.status(200).json({

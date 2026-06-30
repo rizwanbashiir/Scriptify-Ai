@@ -212,15 +212,27 @@ export const changeUserRole = async (req, res, next) => {
       return res.status(400).json({ message: "Invalid user ID" });
     }
 
-    const user = await User.findByIdAndUpdate(
-      id,
-      { role },
-      { new: true, select: "-password" }
-    );
-
+    const user = await User.findById(id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    res.status(200).json({ message: "User role updated", user });
+    // Validate if setting to admin is allowed for this user
+    if (role === "admin") {
+      const adminEmail = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.toLowerCase().trim() : "";
+      const subadminEmail = process.env.SUBADMIN_EMAIL ? process.env.SUBADMIN_EMAIL.toLowerCase().trim() : "";
+      const userEmail = user.email.toLowerCase().trim();
+      if (userEmail !== adminEmail && userEmail !== subadminEmail) {
+        return res.status(403).json({ message: "Only the predefined emails can be assigned the admin role" });
+      }
+    }
+
+    user.role = role;
+    await user.save();
+
+    // Hide password before returning
+    const userObject = user.toObject();
+    delete userObject.password;
+
+    res.status(200).json({ message: "User role updated", user: userObject });
   } catch (error) {
     next(error);
   }
