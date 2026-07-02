@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Token Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg: #0B0F17;
+            --card-bg: #151B26;
+            --border: rgba(255, 255, 255, 0.08);
+            --accent: #6366F1;
+            --text-main: #F3F4F6;
+            --text-muted: #9CA3AF;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+            line-height: 1.4;
+        }
+
+        .btn-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .token-box {
+            display: none;
+            flex-direction: column;
+            gap: 0.75rem;
+            text-align: left;
+            margin-top: 1rem;
+        }
+
+        label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        textarea {
+            width: 100%;
+            height: 120px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-main);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            padding: 0.75rem;
+            resize: none;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: var(--accent);
+        }
+
+        .btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.25rem;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #4F46E5;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1>Google OAuth Token Generator</h1>
+        <p>Sign in with your Google account below to generate an ID token for testing in Swagger.</p>
+
+        <div class="btn-container">
+            <script src="https://accounts.google.com/gsi/client" async defer></script>
+            <div id="g_id_onload" 
+                data-client_id="288054670881-2jlvgmgvr69r051kon8smb664df3a8ma.apps.googleusercontent.com"
+                data-callback="handleCredentialResponse">
+            </div>
+            <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_blue" data-size="large"></div>
+        </div>
+
+        <div id="token-section" class="token-box">
+            <label for="token-area">Google Credential Token</label>
+            <textarea id="token-area" readonly onclick="this.select()"></textarea>
+            <button id="copy-btn" class="btn" onclick="copyToken()">Copy to Clipboard</button>
+        </div>
+    </div>
+
+    <script>
+        function handleCredentialResponse(response) {
+            const tokenArea = document.getElementById('token-area');
+            const tokenSection = document.getElementById('token-section');
+            
+            tokenArea.value = response.credential;
+            tokenSection.style.display = 'flex';
+        }
+
+        function copyToken() {
+            const tokenArea = document.getElementById('token-area');
+            const copyBtn = document.getElementById('copy-btn');
+            
+            tokenArea.select();
+            navigator.clipboard.writeText(tokenArea.value);
+            
+            copyBtn.innerText = 'Copied!';
+            copyBtn.style.backgroundColor = '#10B981';
+            
+            setTimeout(() => {
+                copyBtn.innerText = 'Copy to Clipboard';
+                copyBtn.style.backgroundColor = 'var(--accent)';
+            }, 2000);
+        }
+    </script>
+</body>
+
+</html>
