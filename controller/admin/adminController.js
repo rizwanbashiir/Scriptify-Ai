@@ -93,12 +93,12 @@ export const getFlaggedComments = async (req, res, next) => {
 export const moderateComment = async (req, res, next) => {
   try {
     const { commentId } = req.params;
-    const { action } = req.body; // "approve" | "delete"
+    const { action } = req.body; // "approve" | "delete" | "remove"
 
-    if (!["approve", "delete"].includes(action)) {
+    if (!["approve", "delete", "remove"].includes(action)) {
       return res
         .status(400)
-        .json({ message: "Action must be 'approve' or 'delete'" });
+        .json({ message: "Action must be 'approve', 'delete', or 'remove'" });
     }
 
     const comment = await Comment.findById(commentId);
@@ -108,13 +108,14 @@ export const moderateComment = async (req, res, next) => {
       comment.isFlagged = false;
       comment.isApproved = true;
       await comment.save();
-      return res.status(200).json({ message: "Comment approved" });
+      return res.status(200).json({ message: "Comment approved", comment });
     }
 
-    if (action === "delete") {
+    if (action === "delete" || action === "remove") {
       comment.isDeleted = true;
+      comment.isFlagged = false;
       await comment.save();
-      return res.status(200).json({ message: "Comment deleted" });
+      return res.status(200).json({ message: "Comment deleted", comment });
     }
   } catch (error) {
     next(error);

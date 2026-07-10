@@ -11,6 +11,7 @@ import { groqChat, parseGroqJSON } from "../../config/groq.js";
 import { generateBlogThumbnail } from "../../services/image.service.js";
 import { analyzeSentiment } from "../../services/huggingface.service.js";
 import Blog from "../../models/blog/blogs.js";
+import Comment from "../../models/comment/comments.js";
 import mongoose from "mongoose";
 
 // ─── MODULE 3: AI WRITING ASSISTANT ───────────────────────────────────────────
@@ -200,16 +201,18 @@ Return ONLY this JSON (no other text):
 
 export const generateThumbnail = async (req, res, next) => {
   try {
-    const { title, excerpt, customPrompt, blogId } = req.body;
+    const { title, excerpt, customPrompt, prompt, blogId } = req.body;
+    const inputPrompt = prompt || customPrompt || title;
 
-    if (!title && !customPrompt) {
-      return res.status(400).json({ message: "Title or custom prompt is required" });
+    if (!inputPrompt) {
+      return res.status(400).json({ message: "Prompt, title, or customPrompt is required" });
     }
 
-    const imagePrompt = customPrompt
-      ? customPrompt
-      : `Professional blog cover image for article titled: "${title}". ${excerpt ? `Topic: ${excerpt.substring(0, 150)}` : ""
-      }. Editorial magazine style, clean, modern, no text.`;
+    const imagePrompt = (prompt || customPrompt)
+      ? (prompt || customPrompt)
+      : `Professional blog cover image for article titled: "${title}". ${
+          excerpt ? `Topic: ${excerpt.substring(0, 150)}` : ""
+        }. Editorial magazine style, clean, modern, no text.`;
 
     const { imageUrl, cloudinaryUrl, publicId } = await generateBlogThumbnail(imagePrompt);
 
@@ -336,14 +339,33 @@ ${content}`,
 
 export const analyzeCommentSentiment = async (req, res, next) => {
   try {
-    const { text } = req.body;
+    const { text, commentId } = req.body;
 
     if (!text) {
       return res.status(400).json({ message: "Text is required" });
     }
 
     const result = await analyzeSentiment(text);
-    res.status(200).json({ message: "Sentiment analyzed", sentiment: result });
+
+    let updatedComment = null;
+    if (commentId && mongoose.Types.ObjectId.isValid(commentId)) {
+      const comment = await Comment.findById(commentId);
+      if (comment) {
+        comment.sentiment = result;
+        if (result.label === "TOXIC") {
+          comment.isFlagged = true;
+          comment.isApproved = false;
+        }
+        await comment.save();
+        updatedComment = comment;
+      }
+    }
+
+    res.status(200).json({
+      message: "Sentiment analyzed",
+      sentiment: result,
+      comment: updatedComment || undefined,
+    });
   } catch (error) {
     next(error);
   }

@@ -27,42 +27,29 @@ export const generateBlogThumbnail = async (prompt) => {
   let imageUrl;
   const apiKey = process.env.GEMINI_API_KEY;
 
-  try {
-    if (!apiKey) {
-      console.warn("GEMINI_API_KEY not found, falling back to Pollinations.ai");
-      imageUrl = generatePollinationsUrl(prompt);
-    } else {
-      // Use Gemini Imagen 3
+  // Attempt Gemini Imagen only if apiKey looks like a valid Google API key (starts with AIza)
+  if (apiKey && apiKey.startsWith("AIza")) {
+    try {
       imageUrl = await generateWithGemini(prompt, apiKey);
+    } catch (err) {
+      console.warn("Gemini Imagen failed, falling back to Pollinations.ai:", err.message);
+      imageUrl = generatePollinationsUrl(prompt);
     }
-
-    // Upload to Cloudinary for permanent CDN storage
-    const { cloudinaryUrl, publicId } = await uploadImageFromUrl(
-      imageUrl,
-      "scriptify-ai/thumbnails"
-    );
-    
-    return { imageUrl, cloudinaryUrl, publicId };
-  } catch (err) {
-    console.error("Primary generation or upload failed:", err.message);
-    
-    // If Gemini failed, try Pollinations.ai as a fallback before completely giving up
-    if (apiKey) {
-      console.log("Attempting fallback to Pollinations.ai...");
-      try {
-        imageUrl = generatePollinationsUrl(prompt);
-        const { cloudinaryUrl, publicId } = await uploadImageFromUrl(
-          imageUrl,
-          "scriptify-ai/thumbnails"
-        );
-        return { imageUrl, cloudinaryUrl, publicId };
-      } catch (fallbackErr) {
-        console.error("Fallback upload also failed:", fallbackErr.message);
-      }
-    }
-    
-    return { imageUrl: imageUrl || null, cloudinaryUrl: null, publicId: null };
+  } else {
+    imageUrl = generatePollinationsUrl(prompt);
   }
+
+  // Attempt Cloudinary CDN upload if configured
+  const { cloudinaryUrl, publicId } = await uploadImageFromUrl(
+    imageUrl,
+    "scriptify-ai/thumbnails"
+  );
+
+  return {
+    imageUrl: cloudinaryUrl || imageUrl,
+    cloudinaryUrl,
+    publicId,
+  };
 };
 
 /**

@@ -43,18 +43,26 @@ export const uploadToCloudinary = (fileBuffer, folder = "scriptify-ai") => {
  * @returns {{ cloudinaryUrl: string, publicId: string }}
  */
 export const uploadImageFromUrl = async (imageUrl, folder = "scriptify-ai") => {
-  const result = await cloudinary.uploader.upload(imageUrl, {
-    folder,
-    resource_type: "image",
-    transformation: [
-      { width: 1200, height: 630, crop: "fill", quality: "auto" },
-    ],
-  });
+  if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY) {
+    return { cloudinaryUrl: null, publicId: null };
+  }
+  try {
+    const result = await cloudinary.uploader.upload(imageUrl, {
+      folder,
+      resource_type: "image",
+      transformation: [
+        { width: 1200, height: 630, crop: "fill", quality: "auto" },
+      ],
+    });
 
-  return {
-    cloudinaryUrl: result.secure_url,
-    publicId: result.public_id,
-  };
+    return {
+      cloudinaryUrl: result.secure_url,
+      publicId: result.public_id,
+    };
+  } catch (error) {
+    console.warn("Cloudinary uploadImageFromUrl failed:", error.message);
+    return { cloudinaryUrl: null, publicId: null };
+  }
 };
 
 /**
