@@ -111,10 +111,8 @@ export const signUp = async (req, res, next) => {
     });
     console.log("at line 101")
 
-    // Always log in dev so any test email gets its OTP in the console
-    if (process.env.NODE_ENV !== "production") {
-      console.log(`[DEV] OTP for ${user.email}: ${otp}`);
-    }
+    // Always log OTP in terminal for testing purposes
+    console.log(`🔑 [TESTING] OTP for ${user.email}: ${otp}`);
 
     try {
       console.log("at line 107")
@@ -366,6 +364,9 @@ export const resendOTP = async (req, res, next) => {
     user.emailVerificationOTPExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
     await user.save();
 
+    // Always log OTP in terminal for testing purposes
+    console.log(`🔑 [TESTING] Resent OTP for ${user.email}: ${otp}`);
+
     await sendEmail({
       to: user.email,
       subject: "Scriptify AI — Verify Your Email",
@@ -558,6 +559,9 @@ export const forgotPassword = async (req, res, next) => {
     user.resetOTP = await bcrypt.hash(otp, salt);
     user.resetOTPExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
     await user.save();
+
+    // Always log OTP in terminal for testing purposes
+    console.log(`🔑 [TESTING] Password Reset OTP for ${user.email}: ${otp}`);
 
     await sendEmail({
       to: user.email,
