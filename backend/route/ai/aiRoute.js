@@ -109,7 +109,7 @@ router.get("/recommendations/similar/:blogId", getSimilarBlogs);
  *         schema:
  *           type: integer
  *           default: 10
- *     responses:
+  *     responses:
  *       200:
  *         description: Personalized feed based on reading history and interests
  *         content:
@@ -117,12 +117,22 @@ router.get("/recommendations/similar/:blogId", getSimilarBlogs);
  *             schema:
  *               type: object
  *               properties:
+ *                 page:
+ *                   type: integer
+ *                   example: 1
+ *                 limit:
+ *                   type: integer
+ *                   example: 10
+ *                 total:
+ *                   type: integer
+ *                   example: 12
+ *                 isPersonalized:
+ *                   type: boolean
+ *                   example: true
  *                 blogs:
  *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/Blog'
- *                 pagination:
- *                   $ref: '#/components/schemas/Pagination'
  *       401:
  *         description: Unauthorized
  */
@@ -183,14 +193,16 @@ router.use(aiRateLimiter);
  *                 type: string
  *                 maxLength: 200
  *                 example: The future of AI in healthcare
+ *               keywords:
+ *                 type: string
+ *                 example: artificial intelligence, medicine, diagnosis
  *               tone:
  *                 type: string
- *                 enum: [professional, casual, humorous, educational]
- *                 example: professional
- *               length:
- *                 type: string
- *                 enum: [short, medium, long]
- *                 default: medium
+ *                 example: professional and engaging
+ *               wordCount:
+ *                 type: integer
+ *                 default: 600
+ *                 example: 600
  *     responses:
  *       200:
  *         description: AI-generated blog draft
@@ -199,14 +211,37 @@ router.use(aiRateLimiter);
  *             schema:
  *               type: object
  *               properties:
- *                 title:
+ *                 message:
  *                   type: string
- *                 content:
- *                   type: string
- *                 tags:
- *                   type: array
- *                   items:
- *                     type: string
+ *                   example: Blog draft generated successfully
+ *                 draft:
+ *                   type: object
+ *                   properties:
+ *                     title:
+ *                       type: string
+ *                       example: The Future of AI in Healthcare
+ *                     introduction:
+ *                       type: string
+ *                       example: AI is rapidly transforming the medical industry...
+ *                     sections:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           heading:
+ *                             type: string
+ *                             example: AI in Medical Diagnosis
+ *                           content:
+ *                             type: string
+ *                             example: Machine learning algorithms can analyze medical images...
+ *                     conclusion:
+ *                       type: string
+ *                       example: In conclusion, AI will enhance doctor capabilities...
+ *                     suggestedTags:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["AI", "Healthcare", "Technology"]
  *       400:
  *         description: Validation error
  *       429:
@@ -246,12 +281,12 @@ router.post("/generate-draft", generateDraftValidator, generateBlogDraft);
  *             schema:
  *               type: object
  *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Summary generated successfully
  *                 summary:
  *                   type: string
- *                 keyPoints:
- *                   type: array
- *                   items:
- *                     type: string
+ *                   example: This blog post explains the transition from traditional coding to AI-assisted development...
  *       400:
  *         description: Provide either blogId or content (min 100 chars)
  *       429:
@@ -289,16 +324,28 @@ router.post("/summarize", summarizeValidator, summarizeBlog);
  *             schema:
  *               type: object
  *               properties:
- *                 tags:
- *                   type: array
- *                   items:
- *                     type: string
- *                 keywords:
- *                   type: array
- *                   items:
- *                     type: string
- *                 metaDescription:
+ *                 message:
  *                   type: string
+ *                   example: SEO metadata generated successfully
+ *                 seoData:
+ *                   type: object
+ *                   properties:
+ *                     tags:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["AI", "Writing", "SEO"]
+ *                     seoKeywords:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["ai tools", "writing assistant", "seo strategy"]
+ *                     metaDescription:
+ *                       type: string
+ *                       example: Learn how to utilize AI writing assistants to optimize your blog content.
+ *                     category:
+ *                       type: string
+ *                       example: Technology
  *       429:
  *         description: AI rate limit exceeded
  */
@@ -319,19 +366,22 @@ router.post("/generate-seo-tags", generateSEOTags);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [prompt]
  *             properties:
+ *               title:
+ *                 type: string
+ *                 example: Future of AI
+ *               excerpt:
+ *                 type: string
+ *                 example: AI is changing the world...
+ *               customPrompt:
+ *                 type: string
+ *                 example: A creative watercolor painting of a bright brain
  *               prompt:
  *                 type: string
- *                 example: A futuristic robot writing on a glowing keyboard
- *               style:
+ *                 example: A bright glowing brain representation
+ *               blogId:
  *                 type: string
- *                 enum: [vivid, natural]
- *                 default: vivid
- *               size:
- *                 type: string
- *                 enum: ["1024x1024", "1792x1024", "1024x1792"]
- *                 default: "1792x1024"
+ *                 example: 64a1f2b3c4d5e6f7a8b9c0d2
  *     responses:
  *       200:
  *         description: Generated thumbnail URL
@@ -340,9 +390,15 @@ router.post("/generate-seo-tags", generateSEOTags);
  *             schema:
  *               type: object
  *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Thumbnail generated successfully
  *                 imageUrl:
  *                   type: string
- *                   example: https://oaidalleapiprodscus.blob.core.windows.net/...
+ *                   example: https://res.cloudinary.com/...
+ *                 publicId:
+ *                   type: string
+ *                   example: scriptify-ai/thumbnails/xyz123
  *       429:
  *         description: AI rate limit exceeded
  */
@@ -362,15 +418,13 @@ router.post("/generate-thumbnail", generateThumbnail);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [topic]
  *             properties:
  *               topic:
  *                 type: string
  *                 example: Machine learning for beginners
- *               count:
- *                 type: integer
- *                 default: 5
- *                 description: Number of titles to generate
+ *               content:
+ *                 type: string
+ *                 example: In this article we will explain the basics of machine learning...
  *     responses:
  *       200:
  *         description: List of generated titles
@@ -379,10 +433,14 @@ router.post("/generate-thumbnail", generateThumbnail);
  *             schema:
  *               type: object
  *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Titles generated
  *                 titles:
  *                   type: array
  *                   items:
  *                     type: string
+ *                     example: "Demystifying Machine Learning: A Beginner's Guide"
  *       429:
  *         description: AI rate limit exceeded
  */
@@ -407,10 +465,9 @@ router.post("/generate-titles", generateTitles);
  *               content:
  *                 type: string
  *                 example: this is my blog post about ai. it have many information about ai tools.
- *               tone:
+ *               instruction:
  *                 type: string
- *                 enum: [professional, casual, academic, creative]
- *                 default: professional
+ *                 example: Make it sound more professional and concise.
  *     responses:
  *       200:
  *         description: Improved content
@@ -419,12 +476,12 @@ router.post("/generate-titles", generateTitles);
  *             schema:
  *               type: object
  *               properties:
- *                 improvedContent:
+ *                 message:
  *                   type: string
- *                 changes:
- *                   type: array
- *                   items:
- *                     type: string
+ *                   example: Content improved successfully
+ *                 improved:
+ *                   type: string
+ *                   example: This is my blog post about AI, containing comprehensive details on various AI tools.
  *       429:
  *         description: AI rate limit exceeded
  */
@@ -461,15 +518,25 @@ router.post("/improve-content", improveContent);
  *             schema:
  *               type: object
  *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Sentiment analyzed
  *                 sentiment:
- *                   type: string
- *                   enum: [positive, negative, neutral]
- *                 score:
- *                   type: number
- *                   format: float
- *                   example: 0.92
- *                 explanation:
- *                   type: string
+ *                   type: object
+ *                   properties:
+ *                     label:
+ *                       type: string
+ *                       enum: [POSITIVE, NEGATIVE, TOXIC, NEUTRAL]
+ *                       example: POSITIVE
+ *                     score:
+ *                       type: number
+ *                       format: float
+ *                       example: 0.92
+ *                     explanation:
+ *                       type: string
+ *                       example: The text is highly encouraging and positive.
+ *                 comment:
+ *                   $ref: '#/components/schemas/Comment'
  *       429:
  *         description: AI rate limit exceeded
  */
