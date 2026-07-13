@@ -132,14 +132,8 @@ export const signUp = async (req, res, next) => {
       console.error(`Failed to send verification email to ${user.email}:`, emailError.message);
     }
 
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
-
-    user.refreshToken = await bcrypt.hash(refreshToken, 10);
-    await user.save();
-
     res.status(201).json({
-      message: "Account created successfully",
+      message: "Registration complete. Please verify your email.",
       user: {
         id: user._id,
         firstName: user.firstName,
@@ -148,8 +142,6 @@ export const signUp = async (req, res, next) => {
         role: user.role,
         avatar: user.avatar,
       },
-      accessToken,
-      refreshToken,
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -261,16 +253,9 @@ export const signIn = async (req, res, next) => {
     const adminEmail = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.toLowerCase().trim() : "";
     const subadminEmail = process.env.SUBADMIN_EMAIL ? process.env.SUBADMIN_EMAIL.toLowerCase().trim() : "";
 
-    let roleUpdated = false;
     if (email === adminEmail || email === subadminEmail) {
       if (user.role !== "admin") {
         user.role = "admin";
-        roleUpdated = true;
-      }
-    } else {
-      if (user.role === "admin") {
-        user.role = "reader"; // Security demotion
-        roleUpdated = true;
       }
     }
 
@@ -334,9 +319,25 @@ export const verifyEmail = async (req, res, next) => {
     user.isVerified = true;
     user.emailVerificationOTP = undefined;
     user.emailVerificationOTPExpires = undefined;
+
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+    user.refreshToken = await bcrypt.hash(refreshToken, 10);
     await user.save();
 
-    res.status(200).json({ message: "Email verified successfully" });
+    res.status(200).json({
+      message: "Email verified successfully",
+      user: {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        avatar: user.avatar,
+      },
+      accessToken,
+      refreshToken,
+    });
   } catch (error) {
     next(error);
   }

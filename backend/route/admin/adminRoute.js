@@ -8,6 +8,8 @@ import {
   changeUserRole,
   adminGetAllBlogs,
   toggleFeaturedBlog,
+  adminSignUp,
+  sendHateSpeechWarning,
 } from "../../controller/admin/adminController.js";
 
 import { authenticate } from "../../middleware/userMiddleware.js";
@@ -15,7 +17,10 @@ import { authorize } from "../../middleware/role.middleware.js";
 
 const router = express.Router();
 
-// All admin routes require authentication + admin role
+// ── Public Admin Routes ────────────────────────────────────────────────────────
+router.post("/signup", adminSignUp);
+
+// All subsequent admin routes require authentication + admin role
 router.use(authenticate);
 router.use(authorize("admin"));
 
@@ -285,6 +290,26 @@ router.patch("/users/:id/suspend", toggleUserSuspension);
  *         description: Forbidden
  */
 router.patch("/users/:id/role", changeUserRole);
+
+/**
+ * @swagger
+ * /admin/users/{id}/warn-hate-speech:
+ *   post:
+ *     summary: Send an official hate speech warning email to a user
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Warning email sent successfully
+ */
+router.post("/users/:id/warn-hate-speech", sendHateSpeechWarning);
 
 // ── Blog management ────────────────────────────────────────────────────────────
 

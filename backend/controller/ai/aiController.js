@@ -142,7 +142,17 @@ Content: ${textToSummarize.substring(0, 3000)}`,
 
 export const generateSEOTags = async (req, res, next) => {
   try {
-    const { title, content } = req.body;
+    const blogId = req.body.blogId || req.params.id;
+    let { title, content } = req.body;
+    let blog = null;
+
+    if (blogId && mongoose.Types.ObjectId.isValid(blogId)) {
+      blog = await Blog.findById(blogId);
+      if (blog) {
+        if (!title) title = blog.title;
+        if (!content) content = blog.content;
+      }
+    }
 
     if (!title && !content) {
       return res.status(400).json({ message: "Title or content is required" });
@@ -186,7 +196,21 @@ Return ONLY this JSON (no other text):
       });
     }
 
-    res.status(200).json({ message: "SEO metadata generated successfully", seoData });
+    if (blog) {
+      if (
+        req.user &&
+        (blog.author.toString() === req.user._id.toString() ||
+          req.user.role === "admin")
+      ) {
+        if (Array.isArray(seoData.tags)) blog.tags = seoData.tags;
+        const keywords = seoData.seoKeywords || seoData.keywords;
+        if (Array.isArray(keywords)) blog.seoKeywords = keywords;
+        if (seoData.metaDescription) blog.metaDescription = seoData.metaDescription;
+        await blog.save();
+      }
+    }
+
+    res.status(200).json({ message: "SEO metadata generated successfully", seoData, blog });
   } catch (error) {
     if (error.message?.includes("Groq")) {
       return res.status(503).json({
@@ -202,7 +226,15 @@ Return ONLY this JSON (no other text):
 export const generateThumbnail = async (req, res, next) => {
   try {
     const { title, excerpt, customPrompt, prompt, blogId } = req.body;
-    const inputPrompt = prompt || customPrompt || title;
+    let blog = null;
+
+    if (blogId && mongoose.Types.ObjectId.isValid(blogId)) {
+      blog = await Blog.findById(blogId);
+    }
+
+    const effectiveTitle = title || (blog ? blog.title : null);
+    const effectiveExcerpt = excerpt || (blog ? blog.excerpt : null);
+    const inputPrompt = prompt || customPrompt || effectiveTitle;
 
     if (!inputPrompt) {
       return res.status(400).json({ message: "Prompt, title, or customPrompt is required" });
@@ -210,16 +242,15 @@ export const generateThumbnail = async (req, res, next) => {
 
     const imagePrompt = (prompt || customPrompt)
       ? (prompt || customPrompt)
-      : `Professional blog cover image for article titled: "${title}". ${
-          excerpt ? `Topic: ${excerpt.substring(0, 150)}` : ""
+      : `Professional blog cover image for article titled: "${effectiveTitle}". ${
+          effectiveExcerpt ? `Topic: ${effectiveExcerpt.substring(0, 150)}` : ""
         }. Editorial magazine style, clean, modern, no text.`;
 
-    const { imageUrl, cloudinaryUrl, publicId } = await generateBlogThumbnail(imagePrompt);
+    const { imageUrl, cloudinaryUrl, publicId } = await generateBlogThumbnail(imagePrompt, blog);
 
-    if (blogId && mongoose.Types.ObjectId.isValid(blogId)) {
-      const blog = await Blog.findById(blogId);
+    if (blog) {
       if (
-        blog &&
+        req.user &&
         (blog.author.toString() === req.user._id.toString() ||
           req.user.role === "admin")
       ) {
