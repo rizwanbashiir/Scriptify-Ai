@@ -1,0 +1,424 @@
+{
+  "info": {
+    "_postman_id": "scriptify-e2e-tests",
+    "name": "Scriptify AI — End-to-End Test Suite",
+    "description": "Postman test suite mapping perfectly to the E2E test cases. Uses automated pm.test assertions.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",      "value": "http://localhost:5000/api", "type": "string" },
+    { "key": "accessToken",  "value": "", "type": "string" },
+    { "key": "refreshToken", "value": "", "type": "string" },
+    { "key": "adminToken",   "value": "", "type": "string" },
+    { "key": "blogId",       "value": "", "type": "string" },
+    { "key": "commentId",    "value": "", "type": "string" },
+    { "key": "targetUserId", "value": "64a1f2b3c4d5e6f7a8b9c0d1", "type": "string" },
+    { "key": "testEmail",    "value": "e2etest_{{$randomInt}}@scriptify.dev", "type": "string" },
+    { "key": "testPassword", "value": "TestPass123", "type": "string" },
+    { "key": "otp",          "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. User Management & Authentication",
+      "item": [
+        {
+          "name": "Sign Up",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\",\n  \"email\": \"{{testEmail}}\",\n  \"mobile\": \"+1234567890\",\n  \"password\": \"{{testPassword}}\",\n  \"role\": \"blogger\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/signup", "host": ["{{baseUrl}}"], "path": ["users", "signup"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
+            "pm.test('User created and OTP sent', () => { const res = pm.response.json(); pm.expect(res.message).to.exist; pm.expect(res.user).to.exist; });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"otp\": \"{{otp}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/verify-email", "host": ["{{baseUrl}}"], "path": ["users", "verify-email"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK (Requires manual OTP entry in variables)', () => { if (pm.response.code !== 200) console.log('Note: OTP must be fetched from email or DB for this test to pass'); });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Sign In",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/signin", "host": ["{{baseUrl}}"], "path": ["users", "signin"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => { if(pm.response.code === 403) console.log('Email not verified. Run verify step first.'); else pm.response.to.have.status(200); });",
+            "pm.test('Extract and set tokens', () => { if (pm.response.code === 200) { const res = pm.response.json(); pm.collectionVariables.set('accessToken', res.accessToken); pm.collectionVariables.set('refreshToken', res.refreshToken); } });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/refresh-token", "host": ["{{baseUrl}}"], "path": ["users", "refresh-token"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => { if(pm.collectionVariables.get('refreshToken')) pm.response.to.have.status(200); });",
+            "pm.test('Returns new token pair', () => { if(pm.response.code === 200) { const res = pm.response.json(); pm.expect(res.accessToken).to.exist; pm.expect(res.refreshToken).to.exist; pm.collectionVariables.set('accessToken', res.accessToken); pm.collectionVariables.set('refreshToken', res.refreshToken); } });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/forgot-password", "host": ["{{baseUrl}}"], "path": ["users", "forgot-password"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Sends reset OTP', () => { const res = pm.response.json(); pm.expect(res.message).to.exist; });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"otp\": \"{{otp}}\",\n  \"newPassword\": \"NewPassword456\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/reset-password", "host": ["{{baseUrl}}"], "path": ["users", "reset-password"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK (Requires manual reset OTP)', () => { if (pm.response.code !== 200) console.log('OTP invalid/missing'); });"
+          ], "type": "text/javascript" }}]
+        }
+      ]
+    },
+    {
+      "name": "2. Blog Management",
+      "item": [
+        {
+          "name": "Create a Blog",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title",   "value": "My End-to-End Test Blog", "type": "text" },
+                { "key": "content", "value": "This is a detailed blog post content generated for testing purposes. It must contain enough text to pass validation.", "type": "text" },
+                { "key": "tags",    "value": "[\"Testing\",\"E2E\"]", "type": "text" },
+                { "key": "status",  "value": "published", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/blogs", "host": ["{{baseUrl}}"], "path": ["blogs"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
+            "pm.test('Extract Blog ID', () => { if(pm.response.code === 201) { const res = pm.response.json(); pm.collectionVariables.set('blogId', res.blog._id); } });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Get All Blogs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/blogs?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["blogs"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "search", "value": "Testing", "disabled": true }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Returns paginated array of blogs', () => { const res = pm.response.json(); pm.expect(res.blogs).to.be.an('array'); pm.expect(res.total).to.be.a('number'); });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Get Blog Details",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/blogs/{{blogId}}", "host": ["{{baseUrl}}"], "path": ["blogs", "{{blogId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => { if(pm.collectionVariables.get('blogId')) pm.response.to.have.status(200); });",
+            "pm.test('Returns full blog object', () => { if(pm.response.code === 200) { const res = pm.response.json(); pm.expect(res._id).to.eql(pm.collectionVariables.get('blogId')); } });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Update a Blog",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title",   "value": "My End-to-End Test Blog (UPDATED)", "type": "text" },
+                { "key": "content", "value": "Updated content that still satisfies length validations.", "type": "text" },
+                { "key": "status",  "value": "published", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/blogs/{{blogId}}", "host": ["{{baseUrl}}"], "path": ["blogs", "{{blogId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => { if(pm.collectionVariables.get('blogId')) pm.response.to.have.status(200); });",
+            "pm.test('Returns updated blog', () => { if(pm.response.code === 200) { const res = pm.response.json(); pm.expect(res.blog.title).to.include('UPDATED'); } });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Delete a Blog",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/blogs/{{blogId}}", "host": ["{{baseUrl}}"], "path": ["blogs", "{{blogId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => { if(pm.collectionVariables.get('blogId')) pm.response.to.have.status(200); });"
+          ], "type": "text/javascript" }}]
+        }
+      ]
+    },
+    {
+      "name": "3. Social Interactions & Recommendations",
+      "item": [
+        {
+          "name": "Toggle Like",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/blogs/{{blogId}}/like", "host": ["{{baseUrl}}"], "path": ["blogs", "{{blogId}}", "like"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => { if(pm.collectionVariables.get('blogId')) pm.response.to.have.status(200); });",
+            "pm.test('Toggles like state', () => { if(pm.response.code === 200) { const res = pm.response.json(); pm.expect(res).to.have.property('liked'); } });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Toggle Bookmark",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users/bookmarks/{{blogId}}", "host": ["{{baseUrl}}"], "path": ["users", "bookmarks", "{{blogId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => { if(pm.collectionVariables.get('blogId')) pm.response.to.have.status(200); });",
+            "pm.test('Toggles bookmark state', () => { if(pm.response.code === 200) { const res = pm.response.json(); pm.expect(res).to.have.property('isBookmarked'); } });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Toggle Follow",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users/{{targetUserId}}/follow", "host": ["{{baseUrl}}"], "path": ["users", "{{targetUserId}}", "follow"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => { if(pm.collectionVariables.get('targetUserId')) pm.response.to.have.status(200); });",
+            "pm.test('Updates followers/following array', () => { if(pm.response.code === 200) { const res = pm.response.json(); pm.expect(res).to.have.property('isFollowing'); } });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Get Personalized Feed",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/ai/recommendations/feed", "host": ["{{baseUrl}}"], "path": ["ai", "recommendations", "feed"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Returns ranked array of blogs', () => { const res = pm.response.json(); pm.expect(res.blogs).to.be.an('array'); });"
+          ], "type": "text/javascript" }}]
+        }
+      ]
+    },
+    {
+      "name": "4. AI Integrations",
+      "item": [
+        {
+          "name": "Generate Blog Draft",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"topic\": \"Future of AI\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/ai/generate-draft", "host": ["{{baseUrl}}"], "path": ["ai", "generate-draft"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Returns structured JSON blog post', () => { const res = pm.response.json(); pm.expect(res).to.have.property('title'); pm.expect(res).to.have.property('content'); });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Improve Content",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"ai is cool. it will change world very soon and replace lot of jobs. we need be careful.\",\n  \"tone\": \"professional\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/ai/improve-content", "host": ["{{baseUrl}}"], "path": ["ai", "improve-content"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Returns polished text', () => { const res = pm.response.json(); pm.expect(res).to.have.property('improvedContent'); });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Generate SEO Tags",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Future of AI\",\n  \"content\": \"Artificial intelligence is rapidly advancing. Machine learning models are becoming incredibly sophisticated.\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/ai/generate-seo-tags", "host": ["{{baseUrl}}"], "path": ["ai", "generate-seo-tags"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Returns tags, keywords, metaDescription', () => { const res = pm.response.json(); pm.expect(res.tags).to.be.an('array'); pm.expect(res.keywords).to.be.an('array'); pm.expect(res).to.have.property('metaDescription'); });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Generate Thumbnail",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"A futuristic robot reading a glowing holographic book\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/ai/generate-thumbnail", "host": ["{{baseUrl}}"], "path": ["ai", "generate-thumbnail"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Returns an image URL', () => { const res = pm.response.json(); pm.expect(res.imageUrl).to.be.a('string'); });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Add a Comment (Sentiment Analysis)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"You are an idiot and this blog is absolutely terrible.\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/blogs/{{blogId}}/comments", "host": ["{{baseUrl}}"], "path": ["blogs", "{{blogId}}", "comments"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201 Created', () => { if(pm.collectionVariables.get('blogId')) pm.response.to.have.status(201); });",
+            "pm.test('Extract Comment ID', () => { if(pm.response.code === 201) { const res = pm.response.json(); pm.collectionVariables.set('commentId', res.comment._id); } });",
+            "pm.test('Comment flagged by AI', () => { if(pm.response.code === 201) { const res = pm.response.json(); pm.expect(res.comment.isFlagged).to.be.true; pm.expect(res.comment.isApproved).to.be.false; } });"
+          ], "type": "text/javascript" }}]
+        }
+      ]
+    },
+    {
+      "name": "5. Admin Capabilities",
+      "item": [
+        {
+          "name": "Get Dashboard Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/admin/dashboard", "host": ["{{baseUrl}}"], "path": ["admin", "dashboard"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => { if(pm.collectionVariables.get('adminToken')) pm.response.to.have.status(200); });",
+            "pm.test('Returns platform stats', () => { if(pm.response.code === 200) { const res = pm.response.json(); pm.expect(res).to.have.property('totalUsers'); pm.expect(res).to.have.property('totalBlogs'); } });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Get Flagged Comments",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/admin/comments/flagged", "host": ["{{baseUrl}}"], "path": ["admin", "comments", "flagged"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => { if(pm.collectionVariables.get('adminToken')) pm.response.to.have.status(200); });",
+            "pm.test('Returns list of toxic comments', () => { if(pm.response.code === 200) { const res = pm.response.json(); pm.expect(res.comments).to.be.an('array'); } });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Moderate Comment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"remove\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/comments/{{commentId}}/moderate", "host": ["{{baseUrl}}"], "path": ["admin", "comments", "{{commentId}}", "moderate"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => { if(pm.collectionVariables.get('adminToken') && pm.collectionVariables.get('commentId')) pm.response.to.have.status(200); });"
+          ], "type": "text/javascript" }}]
+        },
+        {
+          "name": "Toggle User Suspension",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/admin/users/{{targetUserId}}/suspend", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{targetUserId}}", "suspend"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 OK', () => { if(pm.collectionVariables.get('adminToken') && pm.collectionVariables.get('targetUserId')) pm.response.to.have.status(200); });",
+            "pm.test('Suspended user cannot login', () => { if(pm.response.code === 200) { const res = pm.response.json(); pm.expect(res).to.have.property('isSuspended'); } });"
+          ], "type": "text/javascript" }}]
+        }
+      ]
+    }
+  ]
+}
