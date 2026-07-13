@@ -3,6 +3,8 @@ import Blog from "../../models/blog/blogs.js";
 import Comment from "../../models/comment/comments.js";
 import Interaction from "../../models/interaction/interaction.js";
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+import { sendEmail } from "../../utils/db/email.js";
 
 // ─── DASHBOARD ANALYTICS ───────────────────────────────────────────────────────
 
@@ -293,6 +295,124 @@ export const toggleFeaturedBlog = async (req, res, next) => {
     res.status(200).json({
       message: blog.isFeatured ? "Blog featured" : "Blog unfeatured",
       isFeatured: blog.isFeatured,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── ADMIN SIGNUP (MAX 3 ADMINS) ──────────────────────────────────────────────
+
+export const adminSignUp = async (req, res, next) => {
+  try {
+    const adminCount = await User.countDocuments({ role: "admin" });
+    if (adminCount >= 3) {
+      return res.status(403).json({
+        message: "Maximum limit of 3 admin accounts reached. No further admin accounts can be created.",
+      });
+    }
+
+    let { firstName, lastName, email, mobile, password } = req.body;
+    if (!firstName || !lastName || !email || !password) {
+      return res.status(400).json({ message: "All required fields must be provided" });
+    }
+
+    email = email.toLowerCase().trim();
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({ message: "Email already registered" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = await bcrypt.hash(otp, 10);
+
+    const user = await User.create({
+      firstName,
+      lastName,
+      email,
+      mobile,
+      password: hashedPassword,
+      role: "admin",
+      emailVerificationOTP: otpHash,
+      emailVerificationOTPExpires: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[DEV] Admin OTP for ${user.email}: ${otp}`);
+    }
+
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Scriptify AI Admin — Verify Your Email",
+        html: `
+          <h2>Admin Email Verification</h2>
+          <p>Your OTP is: <strong style="font-size:24px">${otp}</strong></p>
+          <p>This OTP expires in <strong>10 minutes</strong>.</p>
+        `,
+      });
+    } catch (emailError) {
+      console.error(`Failed to send admin verification email to ${user.email}:`, emailError.message);
+    }
+
+    res.status(201).json({
+      message: "Admin account created successfully. Please verify your email.",
+      user: {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── SEND HATE SPEECH WARNING EMAIL ──────────────────────────────────────────
+
+export const sendHateSpeechWarning = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Scriptify AI — Official Policy Warning regarding Hate Speech",
+        html: `
+          <h2>Official Policy Warning</h2>
+          <p>Hello ${user.firstName},</p>
+          <p>We have detected a history of hateful or toxic comments from your account on Scriptify AI.</p>
+          <p><strong>Please note:</strong> If you post hateful comments again, your account will be permanently suspended.</p>
+          <p>Thank you for adhering to our community guidelines.</p>
+        `,
+      });
+    } catch (emailError) {
+      return res.status(500).json({ message: "Failed to send warning email", error: emailError.message });
+    }
+
+    user.hateSpeechWarningSent = true;
+    await user.save();
+
+    res.status(200).json({
+      message: "Hate speech warning email sent successfully",
+      user: {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        hateSpeechWarningSent: user.hateSpeechWarningSent,
+        toxicCommentsCount: user.toxicCommentsCount,
+      },
     });
   } catch (error) {
     next(error);

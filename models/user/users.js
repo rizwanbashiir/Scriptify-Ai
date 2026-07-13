@@ -99,6 +99,11 @@ const userSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: true },
     isSuspended: { type: Boolean, default: false },
 
+    // Comment hate speech & moderation tracking
+    toxicCommentsCount: { type: Number, default: 0 },
+    hasHateSpeechHistory: { type: Boolean, default: false },
+    hateSpeechWarningSent: { type: Boolean, default: false },
+
     // OTP for password reset
     resetOTP: { type: String, select: false },
     resetOTPExpiry: { type: Date, select: false },

@@ -1,9 +1,11 @@
 import Blog from "../../models/blog/blogs.js";
 import Comment from "../../models/comment/comments.js";
+import User from "../../models/user/users.js";
 import Interaction from "../../models/interaction/interaction.js";
 import mongoose from "mongoose";
 import { analyzeSentiment } from "../../services/huggingface.service.js";
 import { deleteFromCloudinary } from "../../utils/db/cloudinary.js";
+import { groqChat, parseGroqJSON } from "../../config/groq.js";
 
 // ─── CREATE BLOG ───────────────────────────────────────────────────────────────
 
@@ -339,6 +341,7 @@ export const toggleLike = async (req, res, next) => {
       message: isLiked ? "Like removed" : "Blog liked",
       liked: !isLiked,
       likeCount: blog.likes.length,
+      likesCount: blog.likes.length,
     });
   } catch (error) {
     next(error);
@@ -401,6 +404,18 @@ export const addComment = async (req, res, next) => {
 
     const isToxic = sentimentResult.label === "TOXIC";
 
+    let updatedUser = null;
+    if (isToxic) {
+      updatedUser = await User.findByIdAndUpdate(
+        req.user._id,
+        {
+          $inc: { toxicCommentsCount: 1 },
+          $set: { hasHateSpeechHistory: true },
+        },
+        { new: true }
+      );
+    }
+
     const comment = await Comment.create({
       text,
       blog: blogId,
@@ -423,8 +438,12 @@ export const addComment = async (req, res, next) => {
 
     res.status(201).json({
       message: isToxic
-        ? "Comment submitted and is pending review"
+        ? "Your comment has been flagged for hateful/toxic content and is currently in review. An admin will decide whether to post that comment or not."
         : "Comment added successfully",
+      isInReview: isToxic,
+      toxicCommentsCount: updatedUser
+        ? updatedUser.toxicCommentsCount
+        : req.user.toxicCommentsCount || 0,
       comment,
     });
   } catch (error) {
@@ -483,6 +502,84 @@ export const getMyBlogs = async (req, res, next) => {
 
     res.status(200).json({ page, limit, totalPages: Math.ceil(total / limit), total, blogs });
   } catch (error) {
+    next(error);
+  }
+};
+
+// ─── GENERATE SEO KEYWORDS FOR BLOG ────────────────────────────────────────────
+
+export const generateBlogSEO = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid blog ID" });
+    }
+
+    const blog = await Blog.findById(id);
+    if (!blog) return res.status(404).json({ message: "Blog not found" });
+
+    if (
+      blog.author.toString() !== req.user._id.toString() &&
+      req.user.role !== "admin"
+    ) {
+      return res.status(403).json({ message: "Not authorized to generate SEO for this blog" });
+    }
+
+    const plainContent = blog.content.replace(/<[^>]+>/g, " ").substring(0, 2000);
+
+    const messages = [
+      {
+        role: "system",
+        content:
+          "You are an SEO specialist. Always respond with valid JSON only — no markdown, no explanation.",
+      },
+      {
+        role: "user",
+        content: `Analyze this blog post and generate SEO metadata.
+
+Title: ${blog.title}
+Content: ${plainContent}
+
+Return ONLY this JSON (no other text):
+{
+  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8"],
+  "seoKeywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+  "metaDescription": "150-160 character meta description optimized for search engines",
+  "category": "One of: Technology, Science, Health, Business, Culture, Education, Sports, Travel, Food, General"
+}`,
+      },
+    ];
+
+    const raw = await groqChat(messages, { temperature: 0.3, maxTokens: 500, format: "json" });
+
+    let seoData;
+    try {
+      seoData = parseGroqJSON(raw);
+    } catch {
+      return res.status(500).json({
+        message: "AI returned an unexpected format. Please retry.",
+      });
+    }
+
+    if (Array.isArray(seoData.tags)) blog.tags = seoData.tags;
+    const keywords = seoData.seoKeywords || seoData.keywords;
+    if (Array.isArray(keywords)) blog.seoKeywords = keywords;
+    if (seoData.metaDescription) blog.metaDescription = seoData.metaDescription;
+
+    await blog.save();
+
+    res.status(200).json({
+      message: "SEO keywords and tags generated successfully",
+      seoData,
+      blog,
+    });
+  } catch (error) {
+    if (error.message?.includes("Groq")) {
+      return res.status(503).json({
+        message: "AI service unavailable. Check your Groq API key.",
+      });
+    }
     next(error);
   }
 };

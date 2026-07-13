@@ -10,6 +10,7 @@ import {
   addComment,
   deleteComment,
   getMyBlogs,
+  generateBlogSEO,
 } from "../../controller/blog/blogController.js";
 
 import { authenticate, optionalAuthenticate } from "../../middleware/userMiddleware.js";
@@ -289,6 +290,26 @@ router.post("/", authorize("blogger", "admin"), uploadThumbnail, createBlogValid
  *         description: Blog not found
  */
 router.put("/:id", authorize("blogger", "admin"), loadBlog, verifyBlogOwnership, uploadThumbnail, createBlogValidator, updateBlog);
+
+/**
+ * @swagger
+ * /blogs/{id}/generate-seo:
+ *   post:
+ *     summary: Generate and save SEO tags and keywords for a blog post
+ *     tags: [Blogs]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: SEO tags and keywords generated successfully
+ */
+router.post("/:id/generate-seo", authorize("blogger", "admin"), generateBlogSEO);
 
 /**
  * @swagger
