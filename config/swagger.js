@@ -15,6 +15,10 @@ const options = {
     },
     servers: [
       {
+        url: "https://scriptify-ai-production.up.railway.app/api",
+        description: "Production Server (Railway)",
+      },
+      {
         url: "http://localhost:5000/api",
         description: "Local Development Server",
       },
