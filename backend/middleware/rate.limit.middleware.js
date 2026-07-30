@@ -3,7 +3,8 @@ import rateLimit from "express-rate-limit";
 // Global rate limiter — applied to all routes
 export const globalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200,
+  max: 2000,
+  skip: () => process.env.NODE_ENV !== "production",
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests. Please try again in 15 minutes." },
@@ -12,7 +13,8 @@ export const globalRateLimiter = rateLimit({
 // Strict limiter for auth routes (prevent brute force)
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100, // Temporarily increased for testing
+  max: 500,
+  skip: () => process.env.NODE_ENV !== "production",
   message: { message: "Too many login attempts. Please wait 15 minutes." },
 });
 

@@ -14,6 +14,7 @@ import {
   toggleBookmark,
   getMyBookmarks,
   deleteUser,
+  deleteAccount,
   verifyEmail,
   resendOTP,
 } from "../../controller/user/userController.js";
@@ -463,6 +464,36 @@ router.put("/profile", uploadAvatar, updateProfile);
  *         description: Unauthorized
  */
 router.put("/change-password", changePasswordValidator, changePassword);
+
+/**
+ * @swagger
+ * /users/account:
+ *   delete:
+ *     summary: Permanently delete authenticated user's account and associated data
+ *     tags: [Users]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [password]
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 example: CurrentPassword123
+ *     responses:
+ *       200:
+ *         description: Account permanently deleted
+ *       400:
+ *         description: Incorrect password or missing field
+ *       401:
+ *         description: Unauthorized
+ */
+router.delete("/account", deleteAccount);
+router.delete("/me", deleteAccount);
 
 /**
  * @swagger

@@ -81,7 +81,6 @@ export const forgotPasswordValidator = [
 
 export const resetPasswordValidator = [
   body("email").trim().isEmail().withMessage("Invalid email"),
-  body("otp").notEmpty().withMessage("OTP is required"),
   body("newPassword")
     .isLength({ min: 8 }).withMessage("Password must be at least 8 characters"),
 
@@ -109,6 +108,24 @@ export const createBlogValidator = [
 
   body("content")
     .notEmpty().withMessage("Content is required"),
+
+  body("status")
+    .optional()
+    .isIn(["draft", "published"]).withMessage("Status must be draft or published"),
+
+  handleValidationErrors,
+];
+
+export const updateBlogValidator = [
+  body("title")
+    .optional()
+    .trim()
+    .notEmpty().withMessage("Title cannot be empty")
+    .isLength({ max: 200 }).withMessage("Title cannot exceed 200 characters"),
+
+  body("content")
+    .optional()
+    .notEmpty().withMessage("Content cannot be empty"),
 
   body("status")
     .optional()

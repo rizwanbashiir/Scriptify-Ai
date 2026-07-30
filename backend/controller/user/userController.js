@@ -1,4 +1,7 @@
 import User from "../../models/user/users.js";
+import Blog from "../../models/blog/blogs.js";
+import Comment from "../../models/comment/comments.js";
+import Interaction from "../../models/interaction/interaction.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
@@ -443,37 +446,36 @@ export const logout = async (req, res, next) => {
 export const updateProfile = async (req, res, next) => {
   try {
     const userId = req.user._id;
-    const { firstName, lastName, mobile, bio, preferredCategories } = req.body;
+    const { firstName, lastName, mobile, bio, avatarUrl, preferredCategories } = req.body;
 
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    user.firstName = firstName ?? user.firstName;
-    user.lastName = lastName ?? user.lastName;
-    user.mobile = mobile ?? user.mobile;
-    user.bio = bio ?? user.bio;
-    user.preferredCategories = preferredCategories ?? user.preferredCategories;
+    if (firstName !== undefined) user.firstName = firstName.trim();
+    if (lastName !== undefined) user.lastName = lastName.trim();
+    if (mobile !== undefined) user.mobile = mobile.trim();
+    if (bio !== undefined) user.bio = bio;
+    if (preferredCategories !== undefined) user.preferredCategories = preferredCategories;
 
-    // If avatar was uploaded via multer/cloudinary (handled in upload middleware)
     if (req.cloudinaryUrl) {
       user.avatar = req.cloudinaryUrl;
+    } else if (avatarUrl) {
+      user.avatar = avatarUrl;
     }
 
     await user.save();
 
+    const updatedUser = user.toObject();
+    delete updatedUser.password;
+    delete updatedUser.refreshToken;
+    delete updatedUser.resetOTP;
+    delete updatedUser.resetOTPExpiry;
+    delete updatedUser.emailVerificationOTP;
+    delete updatedUser.emailVerificationOTPExpires;
+
     res.status(200).json({
       message: "Profile updated successfully",
-      user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        mobile: user.mobile,
-        bio: user.bio,
-        avatar: user.avatar,
-        role: user.role,
-        preferredCategories: user.preferredCategories,
-      },
+      user: updatedUser,
     });
   } catch (error) {
     next(error);
@@ -552,46 +554,60 @@ export const forgotPassword = async (req, res, next) => {
       return res.status(200).json({ message: "If that email exists, an OTP has been sent" });
     }
 
-    // Generate 6-digit OTP
-    const otp = crypto.randomInt(100000, 999999).toString();
+    // Generate secure reset token
+    const token = crypto.randomBytes(24).toString("hex");
     const salt = await bcrypt.genSalt(10);
 
-    user.resetOTP = await bcrypt.hash(otp, salt);
-    user.resetOTPExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    user.resetOTP = await bcrypt.hash(token, salt);
+    user.resetOTPExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
     await user.save();
 
-    // Always log OTP in terminal for testing purposes
-    console.log(`🔑 [TESTING] Password Reset OTP for ${user.email}: ${otp}`);
+    const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+    const resetLink = `${clientUrl}/reset-password?token=${token}&email=${encodeURIComponent(user.email)}`;
 
-    await sendEmail({
-      to: user.email,
-      subject: "Scriptify AI — Password Reset OTP",
-      html: `
-        <h2>Password Reset Request</h2>
-        <p>Your OTP is: <strong style="font-size:24px">${otp}</strong></p>
-        <p>This OTP expires in <strong>10 minutes</strong>.</p>
-        <p>If you did not request this, please ignore this email.</p>
-      `,
-    });
+    console.log("\n========================================================");
+    console.log(`🔗 [TESTING] Password Reset Link for ${user.email}:`);
+    console.log(resetLink);
+    console.log("========================================================\n");
 
-    res.status(200).json({ message: "If that email exists, an OTP has been sent" });
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Scriptify AI — Password Reset Link",
+        html: `
+          <h2>Password Reset Request</h2>
+          <p>Click the link below to reset your password:</p>
+          <p><a href="${resetLink}">${resetLink}</a></p>
+          <p>This link expires in <strong>15 minutes</strong>.</p>
+        `,
+      });
+    } catch (emailError) {
+      console.error("Failed to send email, link logged above in terminal.");
+    }
+
+    res.status(200).json({ message: "If that email exists, a password reset link has been generated." });
   } catch (error) {
     next(error);
   }
 };
 
-// ─── RESET PASSWORD WITH OTP ──────────────────────────────────────────────────
+// ─── RESET PASSWORD WITH TOKEN / OTP ──────────────────────────────────────────
 
 export const resetPassword = async (req, res, next) => {
   try {
-    const { email, otp, newPassword } = req.body;
+    const { email, token, otp, newPassword } = req.body;
+    const resetCode = token || otp;
+
+    if (!email || !resetCode || !newPassword) {
+      return res.status(400).json({ message: "Email, token, and new password are required" });
+    }
 
     const user = await User.findOne({
       email: email.toLowerCase().trim(),
     }).select("+resetOTP +resetOTPExpiry +password");
 
     if (!user || !user.resetOTP || !user.resetOTPExpiry) {
-      return res.status(400).json({ message: "Invalid or expired OTP" });
+      return res.status(400).json({ message: "Invalid or expired password reset link" });
     }
 
     if (user.isSuspended) {
@@ -599,12 +615,12 @@ export const resetPassword = async (req, res, next) => {
     }
 
     if (user.resetOTPExpiry < new Date()) {
-      return res.status(400).json({ message: "OTP has expired" });
+      return res.status(400).json({ message: "Password reset link has expired. Please request a new one." });
     }
 
-    const isOTPValid = await bcrypt.compare(otp, user.resetOTP);
-    if (!isOTPValid) {
-      return res.status(400).json({ message: "Invalid OTP" });
+    const isTokenValid = await bcrypt.compare(resetCode, user.resetOTP);
+    if (!isTokenValid) {
+      return res.status(400).json({ message: "Invalid password reset link or token" });
     }
 
     const salt = await bcrypt.genSalt(12);
@@ -614,7 +630,7 @@ export const resetPassword = async (req, res, next) => {
     user.refreshToken = undefined;
     await user.save();
 
-    res.status(200).json({ message: "Password reset successfully" });
+    res.status(200).json({ message: "Password reset successful" });
   } catch (error) {
     next(error);
   }
@@ -723,9 +739,129 @@ export const deleteUser = async (req, res, next) => {
     const user = await User.findById(id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    await user.deleteOne();
+    // Clean up user data
+    const userBlogs = await Blog.find({ author: id }).select("_id").lean();
+    const userBlogIds = userBlogs.map((b) => b._id);
+
+    if (userBlogIds.length > 0) {
+      await Comment.deleteMany({ blog: { $in: userBlogIds } });
+    }
+    await Comment.deleteMany({ author: id });
+    await Interaction.deleteMany({
+      $or: [{ user: id }, { blog: { $in: userBlogIds } }],
+    });
+    await Blog.updateMany({ likes: id }, { $pull: { likes: id } });
+    await Blog.deleteMany({ author: id });
+    await User.updateMany({ following: id }, { $pull: { following: id } });
+    await User.updateMany({ followers: id }, { $pull: { followers: id } });
+    if (userBlogIds.length > 0) {
+      await User.updateMany(
+        { bookmarks: { $in: userBlogIds } },
+        { $pullAll: { bookmarks: userBlogIds } }
+      );
+    }
+    await User.findByIdAndDelete(id);
+
     res.status(200).json({ message: "User deleted successfully" });
   } catch (error) {
     next(error);
   }
 };
+
+// ─── DELETE ACCOUNT (Authenticated User Self-Deletion) ────────────────────────
+
+export const deleteAccount = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const { password } = req.body;
+
+    const user = await User.findById(userId).select("+password");
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (user.authProvider === "local" || user.password) {
+      if (!password) {
+        return res.status(400).json({ message: "Current password is required to delete your account." });
+      }
+
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(400).json({ message: "Incorrect password. Please try again." });
+      }
+    }
+
+    const performDeletion = async (session = null) => {
+      const options = session ? { session } : {};
+
+      const userBlogs = await Blog.find({ author: userId }).select("_id").lean();
+      const userBlogIds = userBlogs.map((b) => b._id);
+
+      if (userBlogIds.length > 0) {
+        await Comment.deleteMany({ blog: { $in: userBlogIds } }, options);
+      }
+
+      await Comment.deleteMany({ author: userId }, options);
+
+      await Interaction.deleteMany(
+        {
+          $or: [{ user: userId }, { blog: { $in: userBlogIds } }],
+        },
+        options
+      );
+
+      await Blog.updateMany(
+        { likes: userId },
+        { $pull: { likes: userId } },
+        options
+      );
+
+      await Blog.deleteMany({ author: userId }, options);
+
+      await User.updateMany(
+        { following: userId },
+        { $pull: { following: userId } },
+        options
+      );
+      await User.updateMany(
+        { followers: userId },
+        { $pull: { followers: userId } },
+        options
+      );
+
+      if (userBlogIds.length > 0) {
+        await User.updateMany(
+          { bookmarks: { $in: userBlogIds } },
+          { $pullAll: { bookmarks: userBlogIds } },
+          options
+        );
+      }
+
+      await User.findByIdAndDelete(userId, options);
+    };
+
+    try {
+      const dbSession = await mongoose.startSession();
+      dbSession.startTransaction();
+      try {
+        await performDeletion(dbSession);
+        await dbSession.commitTransaction();
+      } catch (err) {
+        await dbSession.abortTransaction();
+        throw err;
+      } finally {
+        dbSession.endSession();
+      }
+    } catch (sessionErr) {
+      await performDeletion(null);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Your account and associated data have been permanently deleted.",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
