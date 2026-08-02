@@ -111,20 +111,17 @@ export const summarizeBlog = async (req, res, next) => {
       {
         role: "system",
         content:
-          "You are a precise content summarizer. Return only the summary text — no preamble, no explanation. The summary MUST be 300 characters or fewer.",
+          "You are a precise content summarizer. Return only the summary text — no preamble, no explanation.",
       },
       {
         role: "user",
-        content: `Summarize this blog post concisely. Your output MUST be 300 characters or fewer (aim for around 150-250 characters). Capture the main points and key takeaways.
+        content: `Summarize this blog post in exactly 3-5 sentences. Capture the main points and key takeaways. Write for a reader deciding if the full post is worth reading.
 
 Content: ${textToSummarize.substring(0, 3000)}`,
       },
     ];
 
-    let summary = await groqChat(messages, { temperature: 0.3, maxTokens: 120 });
-    if (summary && typeof summary === "string" && summary.length > 300) {
-      summary = summary.substring(0, 300).trim();
-    }
+    const summary = await groqChat(messages, { temperature: 0.3, maxTokens: 300 });
 
     if (blogId) {
       await Blog.findByIdAndUpdate(blogId, { aiSummary: summary });

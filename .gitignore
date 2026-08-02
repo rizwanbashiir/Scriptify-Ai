@@ -1,5 +1,6 @@
-package.json
 node_modules/
 .env
 logs/
-uploads/ 
+uploads/
+
+railway ssh --project=fecdfc15-5726-43e6-96ff-c787604ed0e6 --environment=07efa98f-9fdb-4106-b19a-a0bdf851a7e4 --service=c03b2a75-4757-4d51-8d9d-a15bce4ca5cc
