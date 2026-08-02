@@ -17,7 +17,7 @@ import { authenticate, optionalAuthenticate } from "../../middleware/userMiddlew
 import { authorize } from "../../middleware/role.middleware.js";
 import { loadBlog, verifyBlogOwnership } from "../../middleware/blogmiddleware.js";
 import { uploadThumbnail } from "../../middleware/upload.middleware.js";
-import { createBlogValidator, addCommentValidator } from "../../validators/validators.js";
+import { createBlogValidator, updateBlogValidator, addCommentValidator } from "../../validators/validators.js";
 
 const router = express.Router();
 
@@ -190,7 +190,7 @@ router.use(authenticate);
  *       401:
  *         description: Unauthorized
  */
-router.get("/me/blogs", getMyBlogs);
+router.get("/me/blogs", authenticate, getMyBlogs);
 
 /**
  * @swagger
@@ -242,7 +242,7 @@ router.get("/me/blogs", getMyBlogs);
  *       403:
  *         description: Only bloggers and admins can create blogs
  */
-router.post("/", authorize("blogger", "admin"), uploadThumbnail, createBlogValidator, createBlog);
+router.post("/", authenticate, authorize("blogger", "admin", "reader"), uploadThumbnail, createBlogValidator, createBlog);
 
 /**
  * @swagger
@@ -289,7 +289,7 @@ router.post("/", authorize("blogger", "admin"), uploadThumbnail, createBlogValid
  *       404:
  *         description: Blog not found
  */
-router.put("/:id", authorize("blogger", "admin"), loadBlog, verifyBlogOwnership, uploadThumbnail, createBlogValidator, updateBlog);
+router.put("/:id", authenticate, authorize("blogger", "admin", "reader"), loadBlog, verifyBlogOwnership, uploadThumbnail, updateBlogValidator, updateBlog);
 
 /**
  * @swagger
@@ -334,7 +334,7 @@ router.post("/:id/generate-seo", authorize("blogger", "admin"), generateBlogSEO)
  *       404:
  *         description: Blog not found
  */
-router.delete("/:id", deleteBlog);
+router.delete("/:id", authenticate, authorize("blogger", "admin", "reader"), loadBlog, verifyBlogOwnership, deleteBlog);
 
 /**
  * @swagger

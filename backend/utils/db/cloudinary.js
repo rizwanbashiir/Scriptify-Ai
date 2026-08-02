@@ -16,6 +16,11 @@ cloudinary.config({
  */
 export const uploadToCloudinary = (fileBuffer, folder = "scriptify-ai") => {
   return new Promise((resolve, reject) => {
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      console.warn("⚠️ Cloudinary credentials missing in .env. Skipping Cloudinary upload.");
+      return resolve({ cloudinaryUrl: null, publicId: null });
+    }
+
     const stream = cloudinary.uploader.upload_stream(
       {
         folder,
@@ -25,7 +30,10 @@ export const uploadToCloudinary = (fileBuffer, folder = "scriptify-ai") => {
         ],
       },
       (error, result) => {
-        if (error) return reject(error);
+        if (error) {
+          console.warn("⚠️ Cloudinary upload stream failed:", error.message);
+          return resolve({ cloudinaryUrl: null, publicId: null });
+        }
         resolve({
           cloudinaryUrl: result.secure_url,
           publicId: result.public_id,
@@ -37,24 +45,34 @@ export const uploadToCloudinary = (fileBuffer, folder = "scriptify-ai") => {
 };
 
 /**
- * Upload an image from a URL (for DALL·E generated images)
+ * Upload an image from a URL (for AI generated images)
  * @param {string} imageUrl
  * @param {string} folder
- * @returns {{ cloudinaryUrl: string, publicId: string }}
+ * @returns {{ cloudinaryUrl: string|null, publicId: string|null }}
  */
 export const uploadImageFromUrl = async (imageUrl, folder = "scriptify-ai") => {
-  const result = await cloudinary.uploader.upload(imageUrl, {
-    folder,
-    resource_type: "image",
-    transformation: [
-      { width: 1200, height: 630, crop: "fill", quality: "auto" },
-    ],
-  });
+  if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    console.warn("⚠️ Cloudinary credentials missing in .env. Skipping Cloudinary URL upload.");
+    return { cloudinaryUrl: null, publicId: null };
+  }
 
-  return {
-    cloudinaryUrl: result.secure_url,
-    publicId: result.public_id,
-  };
+  try {
+    const result = await cloudinary.uploader.upload(imageUrl, {
+      folder,
+      resource_type: "image",
+      transformation: [
+        { width: 1200, height: 630, crop: "fill", quality: "auto" },
+      ],
+    });
+
+    return {
+      cloudinaryUrl: result.secure_url,
+      publicId: result.public_id,
+    };
+  } catch (error) {
+    console.warn("⚠️ Cloudinary upload from URL failed:", error.message);
+    return { cloudinaryUrl: null, publicId: null };
+  }
 };
 
 /**
@@ -62,6 +80,9 @@ export const uploadImageFromUrl = async (imageUrl, folder = "scriptify-ai") => {
  * @param {string} publicId
  */
 export const deleteFromCloudinary = async (publicId) => {
+  if (!publicId || !process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    return;
+  }
   try {
     await cloudinary.uploader.destroy(publicId);
   } catch (error) {

@@ -27,45 +27,42 @@ export const generateBlogThumbnail = async (prompt, blogContext = null) => {
 
   let imageUrl = null;
 
-  // 🎯 Priority 1: Gemini Imagen
+  // 🎯 Priority 1: Google Gemini / Imagen
   if (process.env.GEMINI_API_KEY) {
     try {
-      console.log("Attempting Gemini Imagen...");
+      console.log("🤖 Attempting image generation with Google Gemini...");
       imageUrl = await generateWithGemini(enhancedPrompt, process.env.GEMINI_API_KEY);
-      console.log("✅ Gemini Imagen succeeded");
+      console.log("✅ Image generated successfully via Google Gemini");
     } catch (err) {
-      console.warn("❌ Gemini Imagen failed:", err.message);
+      console.warn("⚠️ Google Gemini attempt failed (checking fallback):", err.message);
     }
   }
 
-  // 🎯 Priority 2: HuggingFace FLUX.1-schnell
-  if (!imageUrl && process.env.HUGGINGFACE_API_KEY) {
-    try {
-      console.log("Attempting HuggingFace FLUX.1-schnell...");
-      imageUrl = await generateWithHuggingFace(enhancedPrompt, process.env.HUGGINGFACE_API_KEY);
-      console.log("✅ HuggingFace FLUX succeeded");
-    } catch (err) {
-      console.warn("❌ HuggingFace FLUX failed:", err.message);
-    }
-  }
-
-  // 🎯 Priority 3: Pollinations FLUX (always available, no key required)
+  // 🎯 Priority 2: Pollinations FLUX (Reliable Fallback)
   if (!imageUrl) {
     try {
-      console.log("Attempting Pollinations FLUX...");
+      console.log("🎨 Generating thumbnail via Pollinations FLUX...");
       imageUrl = generatePollinationsUrl(enhancedPrompt);
-      console.log("✅ Pollinations FLUX URL generated");
+      console.log("✅ Thumbnail URL generated successfully (Pollinations FLUX)");
     } catch (err) {
-      console.error("❌ Pollinations FLUX failed:", err.message);
-      throw new Error("All image generation services failed");
+      console.error("❌ Thumbnail generation failed:", err.message);
+      throw new Error("Image generation service failed");
     }
   }
 
   // Upload to Cloudinary if configured
-  const { cloudinaryUrl, publicId } = await uploadImageFromUrl(
-    imageUrl,
-    "scriptify-ai/thumbnails"
-  );
+  let cloudinaryUrl = null;
+  let publicId = null;
+  try {
+    const uploadRes = await uploadImageFromUrl(
+      imageUrl,
+      "scriptify-ai/thumbnails"
+    );
+    cloudinaryUrl = uploadRes?.cloudinaryUrl || null;
+    publicId = uploadRes?.publicId || null;
+  } catch (err) {
+    console.warn("⚠️ Cloudinary upload skipped or failed:", err.message);
+  }
 
   return {
     imageUrl: cloudinaryUrl || imageUrl,
@@ -78,117 +75,82 @@ export const generateBlogThumbnail = async (prompt, blogContext = null) => {
  * Build enhanced prompt from user input and blog context
  */
 const buildEnhancedPrompt = (prompt, blogContext) => {
-  if (!blogContext || typeof blogContext !== "object") {
-    return prompt;
+  let topic = prompt ? prompt.trim() : "";
+
+  // Strip generic boilerplate like "give me thumnail about", "create thumbnail for", "generate thumbnail of"
+  topic = topic.replace(/^(give me|create|generate|make|get me)\s+(a\s+)?(thumbnail|image|cover|picture)\s+(about|for|of)?\s*/i, "").trim();
+
+  if (blogContext && typeof blogContext === "object") {
+    if (!topic && blogContext.title) {
+      topic = blogContext.title;
+    }
   }
 
-  const parts = [];
-  if (blogContext.title) parts.push(`Title: "${blogContext.title}"`);
-  if (blogContext.category) parts.push(`Category: ${blogContext.category}`);
-  if (Array.isArray(blogContext.tags) && blogContext.tags.length > 0) {
-    parts.push(`Themes: ${blogContext.tags.join(", ")}`);
-  }
-  if (blogContext.excerpt) {
-    parts.push(`Summary: ${blogContext.excerpt.substring(0, 150)}`);
+  if (!topic) {
+    topic = "Artificial intelligence technology concepts";
   }
 
-  return prompt
-    ? `${prompt}. Blog Context -> ${parts.join(". ")}`
-    : `Blog cover image for -> ${parts.join(". ")}`;
+  return `${topic}, modern 3D vector concept illustration, clean bright aesthetic, high quality, 8k resolution, professional blog thumbnail cover, no text, no watermark`;
 };
+
 /**
- * ⭐ Priority 1: Generate with Google Imagen 3 (Direct REST API)
- * Avoids SDK endpoint routing bugs and natively requests 16:9 thumbnails.
- *
- * @param {string} prompt
- * @param {string} apiKey
- * @returns {Promise<string>} Base64 data URL
+ * ⭐ Priority 1: Generate with Google Gemini (Prompt Refinement & Generation)
  */
 const generateWithGemini = async (prompt, apiKey) => {
-  const cleanPrompt = `${prompt}, professional blog cover image, high quality, editorial photography style, visually stunning, 4k, sharp, no text, no watermark`;
+  // First attempt: Imagen endpoint
+  try {
+    const modelName = "imagen-3.0-generate-002";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predict?key=${apiKey}`;
 
-  // Use the dedicated Imagen 3 model endpoint
-  const modelName = "imagen-3.0-generate-002";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predict?key=${apiKey}`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      instances: [
-        {
-          prompt: cleanPrompt,
-        }
-      ],
-      parameters: {
-        sampleCount: 1,
-        aspectRatio: "16:9", // Perfect for blog thumbnails!
-        outputOptions: {
-          mimeType: "image/jpeg",
-          compressionQuality: 85
-        }
-      }
-    }),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.text();
-    throw new Error(`Google Imagen API Error (${response.status}): ${errorData}`);
-  }
-
-  const result = await response.json();
-
-  if (!result.predictions || result.predictions.length === 0) {
-    throw new Error("No image generated by Google Imagen");
-  }
-
-  // Imagen returns base64 bytes inside the predictions array
-  const base64Bytes = result.predictions[0].bytesBase64Encoded;
-  const mimeType = result.predictions[0].mimeType || "image/jpeg";
-
-  return `data:${mimeType};base64,${base64Bytes}`;
-};
-
-/**
- * ⭐ Priority 2: Generate with HuggingFace Inference API (FLUX.1-schnell)
- * Free tier available, fast inference
- *
- * @param {string} prompt
- * @param {string} apiKey
- * @returns {Promise<string>} Base64 data URL
- */
-const generateWithHuggingFace = async (prompt, apiKey) => {
-  const cleanPrompt = `${prompt}, stunning professional blog cover illustration, cinematic lighting, ultra high quality, 8k resolution, clean modern composition, no text`;
-
-  const response = await fetch(
-    "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
-    {
+    const response = await fetch(url, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ inputs: cleanPrompt }),
-    }
-  );
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        instances: [{ prompt: `${prompt}, 8k resolution, professional blog cover photography` }],
+        parameters: { sampleCount: 1, aspectRatio: "16:9" }
+      })
+    });
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`HuggingFace API error ${response.status}: ${errorBody}`);
+    if (response.ok) {
+      const result = await response.json();
+      if (result.predictions && result.predictions[0]?.bytesBase64Encoded) {
+        const base64Bytes = result.predictions[0].bytesBase64Encoded;
+        const mimeType = result.predictions[0].mimeType || "image/jpeg";
+        return `data:${mimeType};base64,${base64Bytes}`;
+      }
+    }
+  } catch (e) {
+    // Silently proceed to prompt refinement or fallback
   }
 
-  const arrayBuffer = await response.arrayBuffer();
-  const base64Image = Buffer.from(arrayBuffer).toString("base64");
-  const contentType = response.headers.get("content-type") || "image/jpeg";
+  // Second attempt: Gemini Flash to refine prompt for extreme visual accuracy
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `Convert this topic into a short, vivid, 10-word visual description for a high-end 3D blog cover thumbnail image: "${prompt}". Output ONLY the visual prompt, no intro or quotes.` }] }]
+      })
+    });
 
-  return `data:${contentType};base64,${base64Image}`;
+    if (response.ok) {
+      const data = await response.json();
+      const refinedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (refinedText) {
+        return generatePollinationsUrl(refinedText.trim());
+      }
+    }
+  } catch (e) {
+    // Proceed to standard FLUX realism fallback
+  }
+
+  throw new Error("Google Gemini image service unavailable");
 };
 
 /**
- * ⭐ Priority 3: Pollinations.ai FLUX.1 (Free, No Auth Required)
- * Always works as a fallback. Returns a direct URL (not base64)
+ * ⭐ Priority 2: High-Quality FLUX Realism Generator (Free, Instant)
+ * Uses high-relevance FLUX Realism model for photorealistic topic thumbnails
  *
  * @param {string} prompt
  * @returns {string} Image URL
@@ -196,17 +158,19 @@ const generateWithHuggingFace = async (prompt, apiKey) => {
 const generatePollinationsUrl = (prompt) => {
   const cleanPrompt = prompt
     .replace(/[^a-zA-Z0-9 .,!?'-]/g, " ")
+    .replace(/\s+/g, " ")
     .trim()
-    .substring(0, 400);
+    .substring(0, 300);
 
-  const enhancedPrompt = `${cleanPrompt}, stunning professional editorial blog cover artwork, cinematic composition, hyperdetailed, vibrant colors, 8k resolution, no text, no watermarks`;
-  const encoded = encodeURIComponent(enhancedPrompt);
+  const formattedPrompt = `${cleanPrompt}, highly detailed photorealistic composition, bright studio lighting, 8k resolution, professional editorial blog cover, vibrant colors, crisp focus, no text, no watermark`;
+  const encoded = encodeURIComponent(formattedPrompt);
 
   const width = 1280;
   const height = 720;
   const seed = Math.floor(Math.random() * 1000000);
 
-  return `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&model=flux&enhance=true&nologo=true`;
+  // Using flux-realism model for photorealistic and topic-accurate outputs
+  return `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&model=flux-realism&nologo=true`;
 };
 
 export default { generateBlogThumbnail };
