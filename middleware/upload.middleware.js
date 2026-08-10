@@ -32,7 +32,8 @@ export const uploadThumbnail = [
     try {
       const { cloudinaryUrl, publicId } = await uploadToCloudinary(
         req.file.buffer,
-        "scriptify-ai/thumbnails"
+        "scriptify-ai/thumbnails",
+        req.file.mimetype
       );
       req.cloudinaryUrl = cloudinaryUrl;
       req.cloudinaryPublicId = publicId;
@@ -55,7 +56,8 @@ export const uploadAvatar = [
     try {
       const { cloudinaryUrl, publicId } = await uploadToCloudinary(
         req.file.buffer,
-        "scriptify-ai/avatars"
+        "scriptify-ai/avatars",
+        req.file.mimetype
       );
       req.cloudinaryUrl = cloudinaryUrl;
       req.cloudinaryPublicId = publicId;

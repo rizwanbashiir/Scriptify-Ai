@@ -242,7 +242,7 @@ router.get("/me/blogs", getMyBlogs);
  *       403:
  *         description: Only bloggers and admins can create blogs
  */
-router.post("/", authorize("blogger", "admin"), uploadThumbnail, createBlogValidator, createBlog);
+router.post("/", authorize("reader", "blogger", "admin"), uploadThumbnail, createBlogValidator, createBlog);
 
 /**
  * @swagger
@@ -289,7 +289,7 @@ router.post("/", authorize("blogger", "admin"), uploadThumbnail, createBlogValid
  *       404:
  *         description: Blog not found
  */
-router.put("/:id", authorize("blogger", "admin"), loadBlog, verifyBlogOwnership, uploadThumbnail, createBlogValidator, updateBlog);
+router.put("/:id", authorize("reader", "blogger", "admin"), loadBlog, verifyBlogOwnership, uploadThumbnail, createBlogValidator, updateBlog);
 
 /**
  * @swagger
@@ -309,7 +309,7 @@ router.put("/:id", authorize("blogger", "admin"), loadBlog, verifyBlogOwnership,
  *       200:
  *         description: SEO tags and keywords generated successfully
  */
-router.post("/:id/generate-seo", authorize("blogger", "admin"), generateBlogSEO);
+router.post("/:id/generate-seo", authorize("reader", "blogger", "admin"), generateBlogSEO);
 
 /**
  * @swagger

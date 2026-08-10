@@ -107,10 +107,17 @@ export const createBlog = async (req, res, next) => {
 
     await blog.populate("author", "firstName lastName avatar");
 
+    let userRole = req.user.role;
+    if (req.user.role === "reader") {
+      await User.findByIdAndUpdate(req.user._id, { role: "blogger" });
+      userRole = "blogger";
+    }
+
     res.status(201).json({
       success: true,
       message: "Blog created successfully",
       blog,
+      userRole,
     });
   } catch (error) {
     console.log("Error in createBlog:", error);
@@ -161,6 +168,21 @@ export const getAllBlogs = async (req, res, next) => {
         .lean(),
       Blog.countDocuments(query),
     ]);
+
+    if (blogs.length > 0) {
+      const blogIds = blogs.map((b) => b._id);
+      const commentCounts = await Comment.aggregate([
+        { $match: { blog: { $in: blogIds } } },
+        { $group: { _id: "$blog", count: { $sum: 1 } } },
+      ]);
+      const countMap = {};
+      commentCounts.forEach((c) => {
+        countMap[c._id.toString()] = c.count;
+      });
+      blogs.forEach((b) => {
+        b.commentsCount = countMap[b._id.toString()] || 0;
+      });
+    }
 
     res.status(200).json({
       page,
@@ -499,6 +521,21 @@ export const getMyBlogs = async (req, res, next) => {
         .lean(),
       Blog.countDocuments(query),
     ]);
+
+    if (blogs.length > 0) {
+      const blogIds = blogs.map((b) => b._id);
+      const commentCounts = await Comment.aggregate([
+        { $match: { blog: { $in: blogIds } } },
+        { $group: { _id: "$blog", count: { $sum: 1 } } },
+      ]);
+      const countMap = {};
+      commentCounts.forEach((c) => {
+        countMap[c._id.toString()] = c.count;
+      });
+      blogs.forEach((b) => {
+        b.commentsCount = countMap[b._id.toString()] || 0;
+      });
+    }
 
     res.status(200).json({ page, limit, totalPages: Math.ceil(total / limit), total, blogs });
   } catch (error) {
