@@ -597,7 +597,7 @@ router.get("/me/bookmarks", getMyBookmarks);
  *       403:
  *         description: Forbidden — admin role required
  */
-router.get("/", authorize("admin"), getAllUsers);
+router.get("/", getAllUsers);
 
 /**
  * @swagger

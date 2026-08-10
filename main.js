@@ -29,9 +29,18 @@ import adminRoutes from "./route/admin/adminRoute.js";
 const app = express();
 
 // ─── Security & Utility Middleware ──────────────────────────────────────────
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:3000",
+].filter(Boolean);
+
 // Allow Swagger UI inline scripts/styles by relaxing CSP for the docs path
 app.use(
   helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
@@ -39,12 +48,25 @@ app.use(
         styleSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com"],
         imgSrc: ["'self'", "data:", "https:"],
         frameSrc: ["'self'", "https://accounts.google.com"],
-        connectSrc: ["'self'", "https://accounts.google.com", "https://oauth2.googleapis.com"],
+        connectSrc: ["'self'", "http://localhost:5173", "http://localhost:5000", "https://accounts.google.com", "https://oauth2.googleapis.com"],
       },
     },
   })
 );
-app.use(cors({ origin: process.env.CLIENT_URL || "*", credentials: true }));
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));

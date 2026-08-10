@@ -1,4 +1,5 @@
 import User from "../../models/user/users.js";
+import Blog from "../../models/blog/blogs.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
@@ -23,23 +24,47 @@ export const getAllUsers = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+
+    const [users, blogCounts] = await Promise.all([
+      User.find({ isActive: true })
+        .select("-password -refreshToken -resetOTP -resetOTPExpiry")
+        .lean(),
+      Blog.aggregate([
+        { $match: { status: "published" } },
+        { $group: { _id: "$author", publishedCount: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const countMap = {};
+    blogCounts.forEach((b) => {
+      if (b._id) countMap[b._id.toString()] = b.publishedCount;
+    });
+
+    users.forEach((u) => {
+      u.publishedBlogsCount = countMap[u._id.toString()] || 0;
+    });
+
+    // Prioritize active content creators with published blogs, then followers count, then newest account
+    users.sort((a, b) => {
+      const blogsDiff = (b.publishedBlogsCount || 0) - (a.publishedBlogsCount || 0);
+      if (blogsDiff !== 0) return blogsDiff;
+
+      const followersDiff = (b.followers?.length || 0) - (a.followers?.length || 0);
+      if (followersDiff !== 0) return followersDiff;
+
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
     const skip = (page - 1) * limit;
-
-    const users = await User.find({ isActive: true })
-      .select("-password -refreshToken -resetOTP -resetOTPExpiry")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
-
-    const total = await User.countDocuments({ isActive: true });
+    const paginatedUsers = users.slice(skip, skip + limit);
+    const total = users.length;
 
     res.status(200).json({
       page,
       limit,
       totalPages: Math.ceil(total / limit),
       total,
-      users,
+      users: paginatedUsers,
     });
   } catch (error) {
     next(error);
@@ -58,8 +83,8 @@ export const getUserById = async (req, res, next) => {
 
     const user = await User.findById(id)
       .select("-password -refreshToken -resetOTP -resetOTPExpiry")
-      .populate("following", "firstName lastName avatar")
-      .populate("followers", "firstName lastName avatar")
+      .populate("following", "firstName lastName avatar bio role email createdAt")
+      .populate("followers", "firstName lastName avatar bio role email createdAt")
       .lean();
 
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -89,14 +114,14 @@ export const signUp = async (req, res, next) => {
     const otp = crypto.randomInt(100000, 999999).toString();
     const otpHash = await bcrypt.hash(otp, 10);
 
-    let finalRole = "reader";
+    let finalRole = "blogger";
     const adminEmail = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.toLowerCase().trim() : "";
     const subadminEmail = process.env.SUBADMIN_EMAIL ? process.env.SUBADMIN_EMAIL.toLowerCase().trim() : "";
 
     if (email === adminEmail || email === subadminEmail) {
       finalRole = "admin";
-    } else if (role === "blogger") {
-      finalRole = "blogger";
+    } else if (role) {
+      finalRole = role;
     }
 
     const user = await User.create({
@@ -263,13 +288,14 @@ export const signIn = async (req, res, next) => {
     const refreshToken = generateRefreshToken(user);
 
     user.refreshToken = await bcrypt.hash(refreshToken, 10);
-    
+
     // Save user if role or refresh token changed
     await user.save();
 
     res.status(200).json({
       message: "Login successful",
       user: {
+        _id: user._id,
         id: user._id,
         firstName: user.firstName,
         lastName: user.lastName,
@@ -277,6 +303,8 @@ export const signIn = async (req, res, next) => {
         role: user.role,
         avatar: user.avatar,
         bio: user.bio,
+        following: user.following || [],
+        followers: user.followers || [],
       },
       accessToken,
       refreshToken,
@@ -328,12 +356,15 @@ export const verifyEmail = async (req, res, next) => {
     res.status(200).json({
       message: "Email verified successfully",
       user: {
+        _id: user._id,
         id: user._id,
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
         role: user.role,
         avatar: user.avatar,
+        following: user.following || [],
+        followers: user.followers || [],
       },
       accessToken,
       refreshToken,

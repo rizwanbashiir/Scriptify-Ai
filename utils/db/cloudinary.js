@@ -14,8 +14,17 @@ cloudinary.config({
  * @param {string} folder
  * @returns {{ cloudinaryUrl: string, publicId: string }}
  */
-export const uploadToCloudinary = (fileBuffer, folder = "scriptify-ai") => {
-  return new Promise((resolve, reject) => {
+export const uploadToCloudinary = (fileBuffer, folder = "scriptify-ai", mimetype = "image/png") => {
+  return new Promise((resolve) => {
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      console.warn("Cloudinary credentials missing in .env. Using Data URI fallback.");
+      const base64Image = `data:${mimetype};base64,${fileBuffer.toString("base64")}`;
+      return resolve({
+        cloudinaryUrl: base64Image,
+        publicId: `local_${Date.now()}`,
+      });
+    }
+
     const stream = cloudinary.uploader.upload_stream(
       {
         folder,
@@ -25,7 +34,14 @@ export const uploadToCloudinary = (fileBuffer, folder = "scriptify-ai") => {
         ],
       },
       (error, result) => {
-        if (error) return reject(error);
+        if (error) {
+          console.warn("Cloudinary upload failed:", error.message, ". Falling back to Data URI.");
+          const base64Image = `data:${mimetype};base64,${fileBuffer.toString("base64")}`;
+          return resolve({
+            cloudinaryUrl: base64Image,
+            publicId: `local_${Date.now()}`,
+          });
+        }
         resolve({
           cloudinaryUrl: result.secure_url,
           publicId: result.public_id,
