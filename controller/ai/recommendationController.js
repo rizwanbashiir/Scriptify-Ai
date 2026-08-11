@@ -87,15 +87,14 @@ export const getPersonalizedFeed = async (req, res, next) => {
         .lean();
     }
 
-    // ── Step 5: Fallback to trending if personalization is insufficient ────────
+    // ── Step 5: Fallback to published blogs if personalization is insufficient ────────
     if (recommendedBlogs.length < limit) {
       const needed = limit - recommendedBlogs.length;
       const alreadyIn = recommendedBlogs.map((b) => b._id.toString());
-      const allExclude = [...excludeIds, ...alreadyIn];
 
-      const trending = await Blog.find({
+      let fallback = await Blog.find({
         status: "published",
-        _id: { $nin: allExclude },
+        _id: { $nin: [...excludeIds, ...alreadyIn] },
       })
         .populate("author", "firstName lastName avatar")
         .select("-content -seoKeywords")
@@ -103,7 +102,23 @@ export const getPersonalizedFeed = async (req, res, next) => {
         .limit(needed)
         .lean();
 
-      recommendedBlogs = [...recommendedBlogs, ...trending];
+      // If excludeIds blocked all remaining posts, fallback to any remaining published post
+      if (fallback.length < needed) {
+        const stillNeeded = needed - fallback.length;
+        const currentIn = [...alreadyIn, ...fallback.map((b) => b._id.toString())];
+        const overallFallback = await Blog.find({
+          status: "published",
+          _id: { $nin: currentIn },
+        })
+          .populate("author", "firstName lastName avatar")
+          .select("-content -seoKeywords")
+          .sort({ createdAt: -1, views: -1 })
+          .limit(stillNeeded)
+          .lean();
+        fallback = [...fallback, ...overallFallback];
+      }
+
+      recommendedBlogs = [...recommendedBlogs, ...fallback];
     }
 
     res.status(200).json({
@@ -156,7 +171,7 @@ export const getTrendingBlogs = async (req, res, next) => {
   try {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    const trending = await Blog.find({
+    let trending = await Blog.find({
       status: "published",
       createdAt: { $gte: sevenDaysAgo },
     })
@@ -165,6 +180,17 @@ export const getTrendingBlogs = async (req, res, next) => {
       .sort({ views: -1, likes: -1 })
       .limit(10)
       .lean();
+
+    if (!trending || trending.length === 0) {
+      trending = await Blog.find({
+        status: "published",
+      })
+        .populate("author", "firstName lastName avatar")
+        .select("-content -seoKeywords")
+        .sort({ views: -1, likes: -1 })
+        .limit(10)
+        .lean();
+    }
 
     res.status(200).json({ blogs: trending });
   } catch (error) {
@@ -183,11 +209,19 @@ export const logReadingDuration = async (req, res, next) => {
       return res.status(400).json({ message: "blogId and duration are required" });
     }
 
-    // Update the most recent view interaction for this user/blog
+    const blogDoc = await Blog.findById(blogId).select("category tags");
+
+    // Update or create the most recent view interaction for this user/blog
     await Interaction.findOneAndUpdate(
       { user: req.user._id, blog: blogId, type: "view" },
-      { readingDuration: Math.min(duration, 3600) }, // cap at 1 hour
-      { sort: { createdAt: -1 }, upsert: false }
+      {
+        $set: {
+          readingDuration: Math.min(Math.round(duration), 3600),
+          blogCategory: blogDoc?.category,
+          blogTags: blogDoc?.tags || [],
+        }
+      },
+      { sort: { createdAt: -1 }, upsert: true, new: true }
     );
 
     res.status(200).json({ message: "Reading duration logged" });
