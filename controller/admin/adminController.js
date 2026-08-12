@@ -20,6 +20,9 @@ export const getDashboardStats = async (req, res, next) => {
       newUsersThisWeek,
       newBlogsThisWeek,
       totalViews,
+      readersCount,
+      bloggersCount,
+      adminsCount,
     ] = await Promise.all([
       User.countDocuments({ isActive: true }),
       Blog.countDocuments({ status: "published" }),
@@ -30,12 +33,59 @@ export const getDashboardStats = async (req, res, next) => {
       Blog.aggregate([
         { $group: { _id: null, total: { $sum: "$views" } } },
       ]),
+      User.countDocuments({ role: "reader" }),
+      User.countDocuments({ role: "blogger" }),
+      User.countDocuments({ role: "admin" }),
     ]);
+
+    // Compute weekly growth data for the last 4 weeks
+    const growthData = [];
+    const now = Date.now();
+    const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+
+    for (let i = 3; i >= 0; i--) {
+      const start = new Date(now - (i + 1) * oneWeekMs);
+      const end = new Date(now - i * oneWeekMs);
+
+      const [users, blogs] = await Promise.all([
+        User.countDocuments({ createdAt: { $gte: start, $lt: end } }),
+        Blog.countDocuments({ createdAt: { $gte: start, $lt: end } }),
+      ]);
+
+      growthData.push({
+        week: `Week ${4 - i}`,
+        users,
+        blogs,
+      });
+    }
+
+    // Compute user distribution
+    const grandTotalUsers = readersCount + bloggersCount + adminsCount || 1;
+    const userDistribution = [
+      {
+        name: "Readers",
+        value: readersCount,
+        percentage: Math.round((readersCount / grandTotalUsers) * 100),
+        color: "#a78bfa",
+      },
+      {
+        name: "Bloggers",
+        value: bloggersCount,
+        percentage: Math.round((bloggersCount / grandTotalUsers) * 100),
+        color: "#06b6d4",
+      },
+      {
+        name: "Admins",
+        value: adminsCount,
+        percentage: Math.round((adminsCount / grandTotalUsers) * 100),
+        color: "#f472b6",
+      },
+    ];
 
     // Top 5 most viewed blogs
     const topBlogs = await Blog.find({ status: "published" })
       .populate("author", "firstName lastName")
-      .select("title views likes createdAt")
+      .select("title views likes createdAt coverImage image thumbnail isFeatured")
       .sort({ views: -1 })
       .limit(5)
       .lean();
@@ -57,6 +107,8 @@ export const getDashboardStats = async (req, res, next) => {
         newBlogsThisWeek,
         totalViews: totalViews[0]?.total || 0,
       },
+      growthData,
+      userDistribution,
       topBlogs,
       recentUsers,
     });
@@ -133,6 +185,8 @@ export const adminGetAllUsers = async (req, res, next) => {
     const skip = (page - 1) * limit;
     const search = req.query.search || "";
     const role = req.query.role || "";
+    const status = req.query.status || "";
+    const verified = req.query.verified || "";
 
     const query = {};
     if (search) {
@@ -142,7 +196,22 @@ export const adminGetAllUsers = async (req, res, next) => {
         { email: { $regex: search, $options: "i" } },
       ];
     }
-    if (role) query.role = role;
+    if (role) {
+      query.role = role.toLowerCase();
+    }
+
+    if (status === "active") {
+      query.isSuspended = false;
+      query.isActive = true;
+    } else if (status === "suspended") {
+      query.$or = [{ isSuspended: true }, { isActive: false }];
+    }
+
+    if (verified === "true") {
+      query.isVerified = true;
+    } else if (verified === "false") {
+      query.isVerified = false;
+    }
 
     const [users, total] = await Promise.all([
       User.find(query)
@@ -249,9 +318,28 @@ export const adminGetAllBlogs = async (req, res, next) => {
     const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const skip = (page - 1) * limit;
     const status = req.query.status || "";
+    const search = req.query.search || "";
+    const category = req.query.category || "";
+    const featured = req.query.featured;
 
     const query = {};
-    if (status) query.status = status;
+    if (status && status !== "All Statuses") {
+      query.status = status.toLowerCase();
+    }
+    if (category && category !== "All Categories") {
+      query.category = { $regex: new RegExp(`^${category}$`, "i") };
+    }
+    if (featured === "true" || featured === "Featured") {
+      query.isFeatured = true;
+    } else if (featured === "false" || featured === "Not Featured") {
+      query.isFeatured = false;
+    }
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { tags: { $regex: search, $options: "i" } },
+      ];
+    }
 
     const [blogs, total] = await Promise.all([
       Blog.find(query)
